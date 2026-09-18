@@ -1,9 +1,7 @@
 """SHOT DUEL · tkinter 火柴人动画界面（Python 标准库，零依赖）。
 
-操作：
-  鼠标拖拽画布 = 瞄准（向量长度=力度，方向=仰角）
-  ← → 微调仰角   ↑ ↓ 微调力度   Q / E 后旋 -/+   空格 = 出手/继续
-  1 2 3 = 双人模式挑选场地
+操控（v0.2）：鼠标移动 = 瞄准弧度；按住空格 = 蓄力（1.1s 充满，
+过充缓慢泄力）；松开空格 = 出手。三个输入通道互相独立。
 """
 
 from __future__ import annotations
@@ -13,11 +11,39 @@ import tkinter as tk
 
 from shotlab.engine import Simulator
 
-from .scoring import score_shot
 from .session import DuelSession, SoloSession
 
 FPS = 30
 DT_FRAME = 1.0 / FPS
+
+# 操控参数（策划书 §8 v0.2）
+CHARGE_TIME = 1.1          # s，0 → 满力
+V0_MIN, V0_MAX = 1.5, 13.5
+OVERCHARGE_DECAY = 0.25    # 满力后泄力速率（power/s）
+OVERCHARGE_FLOOR = 0.60
+
+# 调色板（画面清晰度重制）
+C_BG = "#0e1420"
+C_FLOOR = "#b98a4e"
+C_FLOOR_LINE = "#8a6134"
+C_FLOOR_DARK = "#a37a41"
+C_HUD = "#e6edf3"
+C_DIM = "#7d8b9d"
+C_PANEL = "#161d2b"
+C_ACCENT = "#7fd4ff"
+C_ACCENT2 = "#ffb3ba"
+C_HOOP = "#ff6b3d"
+C_NET = "#dfe7ee"
+C_BOARD = "#e8f0f8"
+C_BALL = "#ff9f43"
+C_BALL_SEAM = "#b3541e"
+C_TRAIL = "#ffd479"
+C_WIND_POS = "#5dade2"
+C_WIND_NEG = "#ec7063"
+C_METER = "#2ecc71"
+C_METER_HOT = "#e74c3c"
+
+W, H = 1120, 640
 
 
 # ---------------------------------------------------------------- 火柴人姿态
@@ -72,28 +98,32 @@ class ShotDuelApp:
         self.is_duel = isinstance(session, DuelSession)
 
         root.title("SHOT DUEL · 斗球实验室")
-        self.canvas = tk.Canvas(root, width=980, height=560, bg="#101418",
+        self.canvas = tk.Canvas(root, width=W, height=H, bg=C_BG,
                                 highlightthickness=0)
         self.canvas.pack()
-        bar = tk.Frame(root, bg="#181d24")
+        bar = tk.Frame(root, bg=C_PANEL)
         bar.pack(fill="x")
-        self.lbl_aim = tk.Label(bar, text="", fg="#7fd4ff", bg="#181d24",
-                                font=("Consolas", 11), width=52, anchor="w")
-        self.lbl_aim.pack(side="left", padx=8, pady=4)
-        self.lbl_card = tk.Label(bar, text="", fg="#ffd479", bg="#181d24",
-                                 font=("Microsoft YaHei UI", 10))
-        self.lbl_card.pack(side="left", padx=8)
+        self.lbl_aim = tk.Label(bar, text="", fg=C_ACCENT, bg=C_PANEL,
+                                font=("Consolas", 12), width=46, anchor="w")
+        self.lbl_aim.pack(side="left", padx=10, pady=5)
+        self.lbl_card = tk.Label(bar, text="", fg="#ffd479", bg=C_PANEL,
+                                 font=("Microsoft YaHei UI", 11))
+        self.lbl_card.pack(side="left", padx=10)
 
-        # ---- 状态 ----
+        # ---- 操控状态 ----
+        self.mouse = (W * 0.55, H * 0.3)   # 画布像素
+        self.charging = False
+        self.charge_t = 0.0
+        self.power = 0.0
+        self.spin = 6.0
+
+        # ---- 流程状态 ----
         self.phase = "boot"      # intro/aim/anim/result/pass/pick/end
-        self.aim = dict(v0=7.5, angle=50.0, spin=6.0)
-        self.t_round = 0.0       # 本回合已流逝秒数（篮筐相位连续性用）
-        self.fly = None          # 飞行播放状态
-        self.particles = []      # 风粒子 (x, y)
-        self.drag_start = None
-        self.drag_now = None
+        self.t_round = 0.0
+        self.fly = None
+        self.particles = []
         self.result_shown = None
-        self.player = 0          # duel 当前出手玩家
+        self.player = 0
         self.overlay_lines = []
         self.overlay_title = ""
         self._frame = 0
@@ -105,7 +135,7 @@ class ShotDuelApp:
     def _boot(self):
         if self.is_duel:
             if self.session.need_rule_pick():
-                self._phase_pick("上一回合平局/结束，请输家挑场地")
+                self._phase_pick("上一回合结束，请输家挑场地")
             else:
                 self._start_round()
         else:
@@ -122,7 +152,8 @@ class ShotDuelApp:
             self.session.start_round()
         self.t_round = 0.0
         self.player = 0
-        self.aim = dict(v0=7.5, angle=50.0, spin=6.0)
+        self.spin = 6.0
+        self._stop_charge()
         self._phase_intro()
 
     def _round(self):
@@ -144,6 +175,7 @@ class ShotDuelApp:
             lines.append(f"{tag} 抽到 {sk.icon} {sk.name}（{sk.kind}）：{sk.desc}")
         dist = r.params_by_player[0].distance
         lines.append(f"篮筐距离 {dist:.2f} m · 篮筐高度 {r.base_params.rim_height:.2f} m")
+        lines.append("鼠标瞄准弧度 · 按住空格蓄力 · 松开出手")
         self._overlay("回合开始", lines)
         self.phase = "intro"
 
@@ -152,7 +184,6 @@ class ShotDuelApp:
         self.session.prepare_offers()
         self.overlay_title = title
         self.overlay_lines = []
-        self._redraw()
 
     def _choose(self, idx):
         offers = self.session.offers
@@ -161,7 +192,9 @@ class ShotDuelApp:
         self.session.pick_rule(idx)
         self._start_round()
 
-    def fire(self):
+    # ------------------------------------------------------------------ 出手
+    def fire_with(self, v0: float):
+        """用明确的速度出手（蓄力释放 / 自检直接调用）。"""
         if self.phase != "aim":
             return
         r = self._round()
@@ -171,20 +204,52 @@ class ShotDuelApp:
             rim_phase = (params.rim_phase
                          + 2 * math.pi * self.t_round / params.rim_period) % (2 * math.pi)
         result, score = self.session.shoot(
-            self.aim["v0"], self.aim["angle"], self.aim["spin"],
+            v0, self.aim_angle(), self.spin,
             player=self.player, rim_phase=rim_phase)
         self.fly_phase = rim_phase if rim_phase is not None else params.rim_phase
         self.fly = dict(result=result, score=score, t=0.0, released=False,
                         traj=result.trajectory, dt=params.dt, seam=0.0,
-                        spin=params.spin)
+                        spin=params.spin, v0=v0)
         self.phase = "anim"
+
+    def aim_angle(self) -> float:
+        """鼠标位置 → 仰角（从出手点指向光标），5°~85°。"""
+        p = self._round().params_by_player[self.player]
+        ox, oy = self._px(0.0, p.release_height)
+        dx = self.mouse[0] - ox
+        dy = oy - self.mouse[1]
+        ang = math.degrees(math.atan2(max(dy, 1.0), max(dx, 6.0)))
+        return min(85.0, max(5.0, ang))
+
+    def _charge_power(self) -> float:
+        if self.charge_t <= CHARGE_TIME:
+            return self.charge_t / CHARGE_TIME
+        return max(OVERCHARGE_FLOOR, 1.0 - OVERCHARGE_DECAY * (self.charge_t - CHARGE_TIME))
+
+    def _start_charge(self):
+        if self.phase == "aim" and not self.charging:
+            self.charging = True
+            self.charge_t = 0.0
+
+    def _release_charge(self):
+        if not (self.charging and self.phase == "aim"):
+            self.charging = False
+            return
+        self.charging = False
+        self.fire_with(V0_MIN + (V0_MAX - V0_MIN) * self._charge_power())
+
+    def _stop_charge(self):
+        self.charging = False
+        self.charge_t = 0.0
+        self.power = 0.0
 
     def _after_result(self):
         r = self._round()
         if self.is_duel:
             if len(r.results) < 2:
                 self.player = 1
-                self.aim = dict(v0=7.5, angle=50.0, spin=6.0)
+                self.spin = 6.0
+                self._stop_charge()
                 self._overlay("交棒", [
                     f"把键盘交给 {self.session.names[1]}",
                     "（空格开始瞄准）"])
@@ -202,7 +267,8 @@ class ShotDuelApp:
             else:
                 self.session.start_round()
                 self.t_round = 0.0
-                self.aim = dict(v0=7.5, angle=50.0, spin=6.0)
+                self.spin = 6.0
+                self._stop_charge()
                 self._phase_intro()
 
     def _phase_end(self):
@@ -222,10 +288,12 @@ class ShotDuelApp:
     # ------------------------------------------------------------------ 输入
     def _bind(self):
         self.root.bind("<Key>", self._on_key)
+        self.root.bind("<KeyRelease>", self._on_keyup)
         c = self.canvas
-        c.bind("<Button-1>", self._on_press)
-        c.bind("<B1-Motion>", self._on_drag)
-        c.bind("<ButtonRelease-1>", self._on_release)
+        c.bind("<Motion>", self._on_motion)
+
+    def _on_motion(self, ev):
+        self.mouse = (ev.x, ev.y)
 
     def _on_key(self, ev):
         key = ev.keysym
@@ -241,7 +309,7 @@ class ShotDuelApp:
                     self.phase = "aim"
                 elif self.phase == "result":
                     self._after_result()
-                else:  # pass
+                else:
                     if self.session.round is None:
                         self._start_round()
                     else:
@@ -253,19 +321,19 @@ class ShotDuelApp:
             return
         if self.phase == "aim":
             if key == "space":
-                self.fire()
+                self._start_charge()
             elif key == "Left":
-                self.aim["angle"] = min(89.0, self.aim["angle"] + 0.5)
+                self.spin = max(-12.0, self.spin - 0.5)
             elif key == "Right":
-                self.aim["angle"] = max(5.0, self.aim["angle"] - 0.5)
+                self.spin = min(12.0, self.spin + 0.5)
             elif key == "Up":
-                self.aim["v0"] = min(13.5, self.aim["v0"] + 0.1)
+                self.mouse = (self.mouse[0], self.mouse[1] - 8)
             elif key == "Down":
-                self.aim["v0"] = max(1.5, self.aim["v0"] - 0.1)
-            elif key in ("q", "Q"):
-                self.aim["spin"] = max(-12.0, self.aim["spin"] - 0.5)
-            elif key in ("e", "E"):
-                self.aim["spin"] = min(12.0, self.aim["spin"] + 0.5)
+                self.mouse = (self.mouse[0], self.mouse[1] + 8)
+
+    def _on_keyup(self, ev):
+        if ev.keysym == "space" and self.charging:
+            self._release_charge()
 
     def _restart(self):
         if self.is_duel:
@@ -275,25 +343,12 @@ class ShotDuelApp:
         self.is_duel = isinstance(self.session, DuelSession)
         self._boot()
 
-    def _on_press(self, ev):
-        if self.phase == "aim":
-            self.drag_start = (ev.x, ev.y)
-            self.drag_now = (ev.x, ev.y)
-
-    def _on_drag(self, ev):
-        if self.phase == "aim" and self.drag_start:
-            self.drag_now = (ev.x, ev.y)
-            dx = ev.x - self.drag_start[0]
-            dy = self.drag_start[1] - ev.y  # 屏幕y向下 → 取反
-            self.aim["angle"] = min(89.0, max(5.0, math.degrees(math.atan2(dy, max(dx, 1)))))
-            self.aim["v0"] = min(13.5, max(1.5, math.hypot(dx, dy) * 0.032))
-
-    def _on_release(self, _ev):
-        self.drag_start = None
-
     # ------------------------------------------------------------------ 主循环
     def tick(self):
         self.t_round += DT_FRAME
+        if self.charging:
+            self.charge_t += DT_FRAME
+            self.power = self._charge_power()
         if self.phase == "anim":
             self._advance_anim()
         self._redraw()
@@ -321,34 +376,29 @@ class ShotDuelApp:
                 self._show_result()
 
     def _show_result(self):
-        f = self.fly
-        s = f["score"]
-        title = f"{s.title}   {'★' * s.stars}"
-        self._overlay(title, s.breakdown + [f"本回合得分 {s.pts:+d}"])
+        s = self.fly["score"]
+        self._overlay(f"{s.title}   {'★' * s.stars}",
+                      s.breakdown + [f"本回合得分 {s.pts:+d}"])
         self.phase = "result"
 
-    # ------------------------------------------------------------------ 渲染
+    # ------------------------------------------------------------------ 坐标
     def _domain(self):
         r = self._round()
         p = r.params_by_player[self.player] if r else None
         d = (p.distance if p else 4.2)
-        v0 = self.aim["v0"] if self.phase == "aim" else 7.5
+        v0 = (V0_MIN + (V0_MAX - V0_MIN) * self.power) if self.charging else 8.0
         g = (p.gravity if p else 9.81)
         h = (p.release_height if p else 2.0)
-        apex = h + v0 * v0 / (2 * g)
-        y_max = min(max(4.6, apex * 1.06), 12.0)
-        x_max = d + 1.35
-        return (-1.9, x_max, 0.0, y_max)
+        apex = h + max(v0, 8.0) ** 2 / (2 * g)
+        y_max = min(max(4.6, apex * 1.05), 12.0)
+        return (-2.1, d + 1.5, -0.62, y_max)
 
     def _sx(self):
-        """坐标系 → 像素映射参数。"""
         x0, x1, y0, y1 = self._domain()
-        pad_l, pad_r, pad_t, pad_b = 30, 30, 54, 46
-        w = 980 - pad_l - pad_r
-        hgt = 560 - pad_t - pad_b
-        scale = min(w / (x1 - x0), hgt / (y1 - y0))
-        ox = pad_l + (-x0) * scale + (w - (x1 - x0) * scale) / 2
-        oy = 560 - pad_b
+        pad_l, pad_r, pad_t, pad_b = 40, 40, 58, 64
+        scale = min((W - pad_l - pad_r) / (x1 - x0), (H - pad_t - pad_b) / (y1 - y0))
+        ox = pad_l + (-x0) * scale + ((W - pad_l - pad_r) - (x1 - x0) * scale) / 2
+        oy = H - pad_b
         return scale, ox, oy
 
     def _px(self, x, y):
@@ -356,42 +406,48 @@ class ShotDuelApp:
         return ox + x * s, oy - y * s
 
     def _overlay(self, title, lines):
-        """仅设置浮层内容；phase 由调用方显式设置。"""
         self.overlay_title = title
         self.overlay_lines = list(lines)
 
+    # ------------------------------------------------------------------ 渲染
     def _redraw(self):
         cv = self.canvas
         cv.delete("all")
         fog, _moving = self._rule_flags()
-        scale, ox, oy = self._sx()
-
-        # 地面与米尺
-        cv.create_line(0, oy, 980, oy, fill="#3a4450", width=2)
-        x0m = int(self._domain()[0]) + 1
-        while x0m <= self._domain()[1]:
-            px, _ = self._px(x0m, 0)
-            cv.create_line(px, oy, px, oy + 5, fill="#3a4450")
-            cv.create_text(px, oy + 14, text=str(x0m), fill="#5a6675",
-                           font=("Consolas", 8))
-            x0m += 1
-
+        self._draw_court()
         self._draw_hoop()
         self._draw_particles()
         self._draw_stickman()
-        self._draw_aim()
+        if self.phase == "aim":
+            self._draw_aim(fog)
         if self.phase == "anim" and self.fly:
             self._draw_ball_flight(fog)
+        self._draw_meter()
         self._draw_hud()
-
         if self.phase in ("intro", "result", "pass", "pick", "end"):
             self._draw_overlay()
+
+    def _draw_court(self):
+        cv = self.canvas
+        _, oy = self._px(0, 0)
+        # 木地板
+        cv.create_rectangle(0, oy, W, H, fill=C_FLOOR, outline="")
+        for k in range(8):
+            yy = oy + 8 + k * (H - oy) / 8
+            cv.create_line(0, yy, W, yy, fill=C_FLOOR_LINE)
+        # 米尺与出手点标记
+        for xm in range(int(self._domain()[0]) + 1, int(self._domain()[1]) + 1):
+            px, _ = self._px(xm, 0)
+            cv.create_text(px, oy + 22, text=f"{xm}m", fill="#6b4f2a",
+                           font=("Consolas", 10, "bold"))
+        rx, _ = self._px(0, 0)
+        cv.create_line(rx, oy, rx, oy - 14, fill="#6b4f2a", width=3)
+        cv.create_text(rx, oy + 40, text="出手点", fill="#6b4f2a",
+                       font=("Microsoft YaHei UI", 10))
 
     def _draw_hoop(self):
         cv = self.canvas
         r = self._round()
-        if not r:
-            return
         p = r.params_by_player[self.player]
         if self.phase == "anim" and self.fly and self.fly["released"]:
             t = self.fly["t"] - 0.30
@@ -403,23 +459,29 @@ class ShotDuelApp:
         cx_hoop = p.distance + off
         rh = p.rim_height
         rr = p.rim_radius
-        # 篮板
+        # 篮板 + 内方框
         bx = cx_hoop + 0.375
         x1, y1 = self._px(bx, rh - 0.15)
         x2, y2 = self._px(bx, rh + 0.90)
-        cv.create_line(x1, y1, x2, y2, fill="#c8d6e5", width=6)
+        cv.create_line(x1, y1, x2, y2, fill=C_BOARD, width=8)
+        sq1 = self._px(bx, rh + 0.45)
+        sq2 = self._px(bx, rh + 0.10)
+        cv.create_line(sq1[0], sq1[1], sq2[0], sq2[1], fill="#9fb3c8", width=2)
         # 筐
         fx, fy = self._px(cx_hoop - rr, rh)
         gx, gy = self._px(cx_hoop + rr, rh)
-        cv.create_line(fx, fy, gx, gy, fill="#ff6b3d", width=4)
+        cv.create_line(fx, fy, gx, gy, fill=C_HOOP, width=5)
         for px_, py_ in ((fx, fy), (gx, gy)):
-            cv.create_oval(px_ - 3, py_ - 3, px_ + 3, py_ + 3, fill="#ff6b3d", outline="")
-        # 网
-        for k in (0.22, 0.5, 0.78):
-            nx1 = cx_hoop - rr + 2 * rr * k
-            xq1, yq1 = self._px(cx_hoop - rr * (1 - k * 0.7), rh - 0.26)
-            xa, ya = self._px(nx1, rh)
-            cv.create_line(xa, ya, xq1, yq1, fill="#8899aa")
+            cv.create_oval(px_ - 4, py_ - 4, px_ + 4, py_ + 4,
+                           fill=C_HOOP, outline=C_BOARD)
+        # 网（4 根 + 底部横线）
+        for k in (0.1, 0.37, 0.63, 0.9):
+            xa, ya = self._px(cx_hoop - rr + 2 * rr * k, rh)
+            xb, yb = self._px(cx_hoop - rr * (1 - k * 0.72), rh - 0.28)
+            cv.create_line(xa, ya, xb, yb, fill=C_NET)
+        n1 = self._px(cx_hoop - rr * 0.3, rh - 0.28)
+        n2 = self._px(cx_hoop + rr * 0.3, rh - 0.28)
+        cv.create_line(n1[0], n1[1], n2[0], n2[1], fill=C_NET)
 
     def _draw_particles(self):
         r = self._round()
@@ -430,13 +492,14 @@ class ShotDuelApp:
         if abs(wind) < 0.1:
             return
         cv = self.canvas
-        target = min(30, int(abs(wind) * 10))
-        while len(self.particles) < target:
-            self.particles.append([self._domain()[0] + (self._domain()[1] - self._domain()[0])
-                                   * ((self._frame * 37 + 13 * len(self.particles)) % 100) / 100,
-                                   0.4 + (len(self.particles) * 0.53) % 3.2])
-        self.particles = self.particles[:target]
+        target = min(34, int(abs(wind) * 11))
         x0, x1, _, _ = self._domain()
+        while len(self.particles) < target:
+            self.particles.append([x0 + (x1 - x0)
+                                   * ((self._frame * 37 + 13 * len(self.particles)) % 100) / 100,
+                                   0.4 + (len(self.particles) * 0.53) % 3.4])
+        self.particles = self.particles[:target]
+        color = C_WIND_POS if wind > 0 else C_WIND_NEG
         for pt in self.particles:
             pt[0] += wind * 0.5 * DT_FRAME
             if pt[0] > x1:
@@ -444,12 +507,11 @@ class ShotDuelApp:
             if pt[0] < x0:
                 pt[0] = x1
             px, py = self._px(pt[0], pt[1])
-            dx = 6 if wind > 0 else -6
-            cv.create_line(px, py, px + dx, py, fill="#4f6b8f", width=1)
+            dx = 8 if wind > 0 else -8
+            cv.create_line(px, py, px + dx, py, fill=color, width=2)
 
     def _stickman_poses(self):
-        """返回当前应绘制的姿态（含动画插值）。"""
-        aim_rad = math.radians(self.aim["angle"])
+        aim_rad = math.radians(self.aim_angle())
         if self.phase == "anim" and self.fly:
             t = self.fly["t"]
             if t < 0.16:
@@ -461,7 +523,6 @@ class ShotDuelApp:
                 k = (t - 0.30) / 0.12
                 return blend(pose_extend(aim_rad), pose_follow(), k), -0.75
             return pose_follow(), -0.75
-        # 瞄准姿态：手臂指向瞄准方向
         base = pose_idle()
         ux, uy = math.cos(aim_rad), math.sin(aim_rad)
         base["lhand"] = (0.0 + 0.34 * ux, 1.42 + 0.34 * uy)
@@ -474,67 +535,92 @@ class ShotDuelApp:
         cv = self.canvas
         pose, sx = self._stickman_poses()
         s, _, _ = self._sx()
-        active = (not self.is_duel) or self.phase != "pass"
-        color = "#7fd4ff" if (not self.is_duel or self.player == 0) else "#ffb3ba"
+        color = C_ACCENT if (not self.is_duel or self.player == 0) else C_ACCENT2
 
         def P(name):
             x, y = pose[name]
-            px, py = self._px(sx + x, y)
-            return px, py
+            return self._px(sx + x, y)
 
         hx, hy = P("head")
         r_head = 0.115 * s
         cv.create_oval(hx - r_head, hy - r_head, hx + r_head, hy + r_head,
-                       outline=color, width=2)
+                       fill=color, outline="")
         nx, ny = P("neck")
         px_, py_ = P("hip")
-        cv.create_line(nx, ny, px_, py_, fill=color, width=3)
+        cv.create_line(nx, ny, px_, py_, fill=color, width=5,
+                       capstyle="round")
         for a, b in (("hip", "lknee"), ("lknee", "lfoot"),
                      ("hip", "rknee"), ("rknee", "rfoot"),
                      ("neck", "lelbow"), ("lelbow", "lhand"),
                      ("neck", "relbow"), ("relbow", "rhand")):
             x1, y1 = P(a)
             x2, y2 = P(b)
-            cv.create_line(x1, y1, x2, y2, fill=color, width=2)
+            cv.create_line(x1, y1, x2, y2, fill=color, width=4,
+                           capstyle="round")
         if self.is_duel:
-            tag = self.session.names[self.player]
-            cv.create_text(hx, hy - r_head - 12, text=tag, fill=color,
-                           font=("Microsoft YaHei UI", 10))
-        # 瞄准阶段的球在手上
+            cv.create_text(hx, hy - r_head - 14,
+                           text=self.session.names[self.player], fill=color,
+                           font=("Microsoft YaHei UI", 12, "bold"))
         if self.phase == "aim":
             bx, by = P("rhand")
             rb = 0.12 * s
             cv.create_oval(bx - rb, by - rb, bx + rb, by + rb,
-                           fill="#e67e22", outline="#f9e79f")
+                           fill=C_BALL, outline=C_BALL_SEAM, width=2)
 
-    def _draw_aim(self):
-        if self.phase != "aim":
-            return
+    def _draw_aim(self, fog):
         cv = self.canvas
         r = self._round()
         p = r.params_by_player[self.player]
-        fog, _ = self._rule_flags()
-        a = math.radians(self.aim["angle"])
-        # 箭头
+        a = math.radians(self.aim_angle())
+        v0_now = (V0_MIN + (V0_MAX - V0_MIN) * self.power) if self.charging else 8.0
+        # 瞄准线（虚线箭头，长度随力度）
         x0, y0 = self._px(0.15, p.release_height)
-        x1, y1 = self._px(0.15 + 1.15 * math.cos(a) * (self.aim["v0"] / 9.0),
-                          p.release_height + 1.15 * math.sin(a) * (self.aim["v0"] / 9.0))
-        cv.create_line(x0, y0, x1, y1, fill="#f9e79f", width=2, arrow="last")
-        # 预测弹道（技能"物理之眼"且无雾）
+        ln = 1.0 + 1.4 * ((v0_now - V0_MIN) / (V0_MAX - V0_MIN))
+        x1, y1 = self._px(0.15 + ln * math.cos(a),
+                          p.release_height + ln * math.sin(a))
+        cv.create_line(x0, y0, x1, y1, fill=C_TRAIL, width=2,
+                       dash=(6, 5), arrow="last")
+        cv.create_text(x1, y1 - 16, text=f"{self.aim_angle():.1f}°",
+                       fill=C_TRAIL, font=("Consolas", 12, "bold"))
+        # 预测弹道（物理之眼 + 无雾；蓄力时实时跟随力度）
         if r.preview[self.player] and not fog:
-            sim = Simulator(p.with_(v0=self.aim["v0"],
-                                    angle_deg=self.aim["angle"],
-                                    spin=self.aim["spin"])).run()
-            for x, y in sim.trajectory[::8]:
+            sim = Simulator(p.with_(v0=v0_now, angle_deg=self.aim_angle(),
+                                    spin=self.spin)).run()
+            for x, y in sim.trajectory[::6]:
                 px, py = self._px(x, y)
-                cv.create_oval(px - 1, py - 1, px + 1, py + 1,
+                cv.create_oval(px - 1.5, py - 1.5, px + 1.5, py + 1.5,
                                fill="#5dade2", outline="")
+
+    def _draw_meter(self):
+        """蓄力条：左侧竖条，过充区变红。"""
+        if self.phase != "aim":
+            return
+        cv = self.canvas
+        mx, mt, mb = 26, 120, 560
+        frac = self.power if self.charging else 0.0
+        cv.create_rectangle(mx, mt, mx + 18, mb, fill=C_PANEL,
+                            outline=C_DIM, width=2)
+        fh = int((mb - mt) * frac)
+        hot = self.charging and self.charge_t > CHARGE_TIME
+        color = C_METER_HOT if hot else C_METER
+        if fh > 0:
+            cv.create_rectangle(mx + 2, mb - fh, mx + 16, mb - 2,
+                                fill=color, outline="")
+        for k in (0.25, 0.5, 0.75, 1.0):
+            yy = mb - int((mb - mt) * k)
+            cv.create_line(mx, yy, mx + 22, yy, fill=C_DIM)
+        label = "泄力!" if hot else ("蓄力中…" if self.charging else "力度")
+        cv.create_text(mx + 9, mt - 18, text=label, fill=(C_METER_HOT if hot else C_HUD),
+                       font=("Microsoft YaHei UI", 10, "bold"))
+        if self.charging:
+            v0 = V0_MIN + (V0_MAX - V0_MIN) * self.power
+            cv.create_text(mx + 9, mb + 18, text=f"{v0:.1f}", fill=C_HUD,
+                           font=("Consolas", 11, "bold"))
 
     def _draw_ball_flight(self, fog):
         f = self.fly
         cv = self.canvas
-        r = self._round()
-        p = r.params_by_player[self.player]
+        p = self._round().params_by_player[self.player]
         s, _, _ = self._sx()
         t_rel = 0.30
         if not f["released"]:
@@ -542,23 +628,21 @@ class ShotDuelApp:
         idx = min(int((f["t"] - t_rel) / f["dt"]), len(f["traj"]) - 1)
         traj = f["traj"]
         if not fog:
-            # 尾迹
-            for j in range(max(0, idx - 26), idx, 3):
+            for j in range(max(0, idx - 30), idx, 3):
                 x, y = traj[j]
                 px, py = self._px(x, y)
-                cv.create_oval(px - 1.2, py - 1.2, px + 1.2, py + 1.2,
-                               fill="#7d5a3c", outline="")
-        # 球（雾中隐藏）
+                cv.create_oval(px - 1.5, py - 1.5, px + 1.5, py + 1.5,
+                               fill=C_TRAIL, outline="")
         if not fog:
             x, y = traj[idx]
             bx, by = self._px(x, y)
             rb = p.ball_radius * s
             cv.create_oval(bx - rb, by - rb, bx + rb, by + rb,
-                           fill="#e67e22", outline="#f9e79f", width=2)
-            ang = f["seam"]
-            cv.create_line(bx - rb * math.cos(ang), by - rb * math.sin(ang),
-                           bx + rb * math.cos(ang), by + rb * math.sin(ang),
-                           fill="#a04000")
+                           fill=C_BALL, outline=C_BALL_SEAM, width=3)
+            for ang in (f["seam"], f["seam"] + math.pi / 2):
+                cv.create_line(bx - rb * math.cos(ang), by - rb * math.sin(ang),
+                               bx + rb * math.cos(ang), by + rb * math.sin(ang),
+                               fill=C_BALL_SEAM)
 
     def _draw_hud(self):
         cv = self.canvas
@@ -581,49 +665,50 @@ class ShotDuelApp:
                 bits.append("篮筐移动中")
             if fog:
                 bits.append("浓雾")
-            cv.create_text(490, 16, text="  ·  ".join(bits), fill="#cfd8dc",
-                           font=("Microsoft YaHei UI", 12))
-        aim_txt = (f"力度 {self.aim['v0']:5.2f} m/s   仰角 {self.aim['angle']:5.1f}°   "
-                   f"后旋 {self.aim['spin']:5.1f} rad/s")
-        self.lbl_aim.config(text=aim_txt)
+            # 顶栏面板
+            cv.create_rectangle(0, 0, W, 44, fill=C_PANEL, outline="")
+            cv.create_text(W / 2, 22, text="  ·  ".join(bits), fill=C_HUD,
+                           font=("Microsoft YaHei UI", 14, "bold"))
+        ang = self.aim_angle() if r else 0
+        v0_now = (V0_MIN + (V0_MAX - V0_MIN) * self.power) if self.charging else 8.0
+        self.lbl_aim.config(text=f"力度 {v0_now:5.2f} m/s   仰角 {ang:5.1f}°   "
+                                 f"后旋 {self.spin:5.1f} rad/s")
         if r:
             sk = r.skills[self.player]
             self.lbl_card.config(text=f"{sk.icon} {sk.name}：{sk.desc}")
 
     def _draw_overlay(self):
         cv = self.canvas
-        cv.create_rectangle(140, 120, 840, 440, fill="#0d1117", outline="#3a4450", width=2)
-        cv.create_text(490, 156, text=self.overlay_title, fill="#ffd479",
-                       font=("Microsoft YaHei UI", 20, "bold"))
-        y = 205
-        big = self.phase in ("result", "pick", "end")
+        cv.create_rectangle(200, 130, W - 200, 470, fill="#0d1117",
+                            outline="#3a4450", width=2)
+        cv.create_text(W / 2, 170, text=self.overlay_title, fill="#ffd479",
+                       font=("Microsoft YaHei UI", 22, "bold"))
+        y = 220
         for line in self.overlay_lines[:9]:
-            cv.create_text(490, y, text=line,
-                           fill="#e6edf3" if not big else "#cfd8dc",
-                           font=("Microsoft YaHei UI", 13 if big else 12))
-            y += 26
+            cv.create_text(W / 2, y, text=line, fill=C_HUD,
+                           font=("Microsoft YaHei UI", 13))
+            y += 28
         if self.phase == "pick":
             for i, rule in enumerate(self.session.offers):
-                bx = 200 + i * 210
-                cv.create_rectangle(bx, 300, bx + 190, 396,
-                                    fill="#1b2430", outline="#7fd4ff", width=2,
+                bx = 260 + i * 220
+                cv.create_rectangle(bx, 320, bx + 200, 420,
+                                    fill="#1b2430", outline=C_ACCENT, width=2,
                                     tags=f"opt{i}")
-                cv.create_text(bx + 95, 322, text=f"[{i + 1}] {rule.icon} {rule.name}",
-                               fill="#ffd479", font=("Microsoft YaHei UI", 13, "bold"),
+                cv.create_text(bx + 100, 344, text=f"[{i + 1}] {rule.icon} {rule.name}",
+                               fill="#ffd479", font=("Microsoft YaHei UI", 14, "bold"),
                                tags=f"opt{i}")
-                cv.create_text(bx + 95, 350, text=rule.desc, fill="#aebbc8",
-                               font=("Microsoft YaHei UI", 10), width=180,
+                cv.create_text(bx + 100, 374, text=rule.desc, fill="#aebbc8",
+                               font=("Microsoft YaHei UI", 11), width=190,
                                tags=f"opt{i}")
-                cv.create_text(bx + 95, 380, text="★" * rule.stars, fill="#ff6b3d",
-                               font=("Consolas", 10), tags=f"opt{i}")
+                cv.create_text(bx + 100, 404, text="★" * rule.stars, fill=C_HOOP,
+                               font=("Consolas", 11), tags=f"opt{i}")
                 cv.tag_bind(f"opt{i}", "<Button-1>",
                             lambda _e, i=i: self._choose(i))
-        elif self.phase != "pass":
-            cv.create_text(490, 415, text="—— 空格 继续 ——", fill="#7fd4ff",
-                           font=("Microsoft YaHei UI", 11))
         else:
-            cv.create_text(490, 415, text="—— 空格 继续 ——", fill="#7fd4ff",
-                           font=("Microsoft YaHei UI", 11))
+            hint = "—— 空格 继续 ——" if self.phase != "aim" else ""
+            if hint:
+                cv.create_text(W / 2, 445, text=hint, fill=C_ACCENT,
+                               font=("Microsoft YaHei UI", 12))
 
 
 def run_gui(mode: str = "solo", seed=None):
@@ -638,7 +723,7 @@ def run_gui(mode: str = "solo", seed=None):
 
 
 def run_selftest() -> bool:
-    """无头自检：驱动完整对局流程，验证动画状态机与计分接线。"""
+    """无头自检：蓄力出手 + 完整对局流程。"""
     root = tk.Tk()
     root.withdraw()
     session = SoloSession(seed=3)
@@ -647,16 +732,25 @@ def run_selftest() -> bool:
     assert app.phase == "intro", app.phase
     app._on_key(type("E", (), {"keysym": "space"})())
     assert app.phase == "aim"
-    app.aim.update(v0=7.55, angle=52.5, spin=6.0)
-    app.fire()
-    assert app.phase == "anim"
-    for _ in range(4000):
+
+    # --- 蓄力机制：按住 0.55s ≈ 半力，松开触发出手 ---
+    app._start_charge()
+    for _ in range(16):          # ~0.53s
         app.tick()
-        if app.phase == "result":
+    assert app.charging and abs(app.power - 0.53 / CHARGE_TIME) < 0.05
+    mid_v0 = V0_MIN + (V0_MAX - V0_MIN) * app.power
+    app._release_charge()
+    assert app.phase == "anim", app.phase
+    assert abs(app.fly["v0"] - mid_v0) < 1e-6
+
+    for _ in range(6000):
+        app.tick()
+        if app.phase in ("result", "end"):
             break
     assert app.phase == "result", f"anim 未收敛: {app.phase}"
     assert len(app.session.history) == 1
-    # 打完剩余回合（状态机无关的推进循环）
+
+    # --- 打完剩余回合（状态机无关推进） ---
     def _key(k="space"):
         app._on_key(type("E", (), {"keysym": k})())
     for _ in range(40):
@@ -665,8 +759,10 @@ def run_selftest() -> bool:
         if app.phase in ("intro", "result", "pass"):
             _key()
         if app.phase == "aim":
-            app.aim.update(v0=7.55, angle=52.5, spin=6.0)
-            app.fire()
+            app._start_charge()
+            for _ in range(40):   # 充满（1.33s）后过充一段
+                app.tick()
+            app._release_charge()
             for _ in range(6000):
                 app.tick()
                 if app.phase in ("result", "end"):
@@ -674,5 +770,5 @@ def run_selftest() -> bool:
     assert app.phase == "end", f"未到达终局: {app.phase}"
     total = app.session.total
     root.destroy()
-    print(f"SELFTEST OK · 5回合跑通 · 总分 {total}")
+    print(f"SELFTEST OK · 蓄力出手验证 · 5回合跑通 · 总分 {total}")
     return True

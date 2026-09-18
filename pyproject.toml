@@ -1,0 +1,21 @@
+[project]
+name = "basketball-physics-lab"
+version = "0.1.0"
+description = "SHOT LAB — 2D 篮球投篮物理实验室：抛体/阻力/Magnus/碰撞/蒙特卡洛命中率"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.5"]
+
+[project.scripts]
+shotlab = "shotlab.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["shotlab*"]

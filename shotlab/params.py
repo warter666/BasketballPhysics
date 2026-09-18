@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, replace
 
+from .constants import BALL_MASS, BALL_RADIUS, G, RIM_HEIGHT, RIM_RADIUS
+
 
 @dataclass(frozen=True)
 class ShotParams:
@@ -15,6 +17,16 @@ class ShotParams:
     drag / magnus  气动开关（做对照实验用）
     dt             积分步长 s（RK4）
     max_time       单次模拟上限 s
+
+    —— 游戏规则变体参数（默认=标准球场）——
+    wind_ax        恒定水平风加速度 m/s²（+x 吹向篮筐）
+    gravity        重力加速度 m/s²
+    rim_radius     筐开口半径 m
+    rim_height     筐平面高度 m
+    ball_radius    球半径 m
+    ball_mass      球质量 kg
+    rim_amp/period/phase  篮筐（含篮板）水平简谐移动
+    magnet         磁性篮筐吸附加速度 m/s²
     """
 
     v0: float = 7.55
@@ -26,6 +38,17 @@ class ShotParams:
     magnus: bool = True
     dt: float = 0.002
     max_time: float = 8.0
+
+    wind_ax: float = 0.0
+    gravity: float = G
+    rim_radius: float = RIM_RADIUS
+    rim_height: float = RIM_HEIGHT
+    ball_radius: float = BALL_RADIUS
+    ball_mass: float = BALL_MASS
+    rim_amp: float = 0.0
+    rim_period: float = 0.0
+    rim_phase: float = 0.0
+    magnet: float = 0.0
 
     def with_(self, **kw) -> "ShotParams":
         return replace(self, **kw)

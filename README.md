@@ -1,7 +1,27 @@
-# 🧪 BasketballPhysics — SHOT LAB
+# 🧪 BasketballPhysics — SHOT LAB + 斗球实验室
 
-> 2D 篮球投篮物理实验室：调参数 → 看轨迹 → 算命中率。
-> 纯 Python 标准库实现，零依赖即可运行（绘图功能可选装 matplotlib）。
+> 2D 篮球投篮物理实验室 + 游戏化版本《斗球实验室 SHOT DUEL》。
+> 纯 Python 标准库实现，零依赖即可运行（tkinter 动画为标准库自带）。
+
+## 🎮 斗球实验室 SHOT DUEL（游戏模式）
+
+策划书见 [docs/DESIGN.md](docs/DESIGN.md)。核心卖点：**物理读数就是计分板**
+（偏心 ≤3cm 且入射角 40°~55° = PERFECT 3 分）。
+
+```bash
+python -m shotduel                       # 单人生存赛季（tkinter 火柴人动画）
+python -m shotduel --mode duel           # 双人热座对决（输家挑场地，篮筐会"记住"）
+python -m shotduel --cli                 # 终端退化模式
+python -m shotduel --selftest            # 无头自检
+
+操作：拖拽画布瞄准 · ←→↑↓ 微调 · Q/E 后旋 · 空格出手
+```
+
+每回合随机规则变体（风/移动篮筐/小筐/月球重力/浓雾…，只改物理参数）+
+抽 1 张变数卡（有好有坏，改变执行噪声/几何/倍率）。单人 5 回合结算总分；
+双人先拿 3 个回合胜场获胜。
+
+## 🧪 物理实验室模式（SHOT LAB）
 
 ```text
                                                                     ▌         ← 篮板

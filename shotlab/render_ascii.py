@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-from .constants import BOARD_BOTTOM, BOARD_TOP, RIM_HEIGHT
-from .params import ShotParams
 from .engine import ShotResult
+from .params import ShotParams
 
 
 def render_canvas(result: ShotResult, params: ShotParams,
                   width: int = 76, height: int = 20) -> str:
     board_x = params.distance + 0.375
+    board_bottom = params.rim_height - 0.15
+    board_top = params.rim_height + 0.90
+    rim_h = params.rim_height
     xs = [x for x, _ in result.trajectory] or [0.0]
     ys = [y for _, y in result.trajectory] or [params.release_height]
 
     x_min = min(-0.3, min(xs)) - 0.1
     x_max = max(board_x + 0.55, max(xs) + 0.2)
-    y_max = max(BOARD_TOP + 0.4, max(ys) + 0.25)
+    y_max = max(board_top + 0.4, max(ys) + 0.25)
 
     grid = [[" "] * width for _ in range(height)]
 
@@ -34,7 +36,7 @@ def render_canvas(result: ShotResult, params: ShotParams,
     board_cells = []
     for r in range(height):
         y = (height - 1 - r) / (height - 1) * y_max
-        if BOARD_BOTTOM <= y <= BOARD_TOP:
+        if board_bottom <= y <= board_top:
             rc = cell(board_x, y)
             if rc:
                 grid[rc[0]][rc[1]] = "▌"
@@ -43,8 +45,8 @@ def render_canvas(result: ShotResult, params: ShotParams,
     # 篮筐（侧视：前/后筐点 + 连线）
     rim_cells = []
     rim_pts = []
-    rc = cell(params.distance - 0.2286, RIM_HEIGHT)
-    rc2 = cell(params.distance + 0.2286, RIM_HEIGHT)
+    rc = cell(params.distance - 0.2286, rim_h)
+    rc2 = cell(params.distance + 0.2286, rim_h)
     if rc and rc2 and rc[0] == rc2[0]:
         rim_pts = [rc, rc2]
         for c in range(rc[1], rc2[1] + 1):
@@ -98,7 +100,7 @@ def render_canvas(result: ShotResult, params: ShotParams,
     rim_row = rim_pts[0][0] if rim_pts else None
     if rim_row is not None and rim_row < len(lines) - 2:
         lines[rim_row] += "  ← RIM 3.05 m"
-    board_top_row = cell(board_x, BOARD_TOP)
+    board_top_row = cell(board_x, board_top)
     if board_top_row:
         lines[board_top_row[0]] += "  ← 篮板"
 

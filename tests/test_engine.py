@@ -52,6 +52,43 @@ class TestAero(unittest.TestCase):
         self.assertGreater(spun.apex, plain.apex + 0.005)
         self.assertGreater(spun.landing_x, plain.landing_x)
 
+    def test_tailwind_extends_carry(self):
+        calm = Simulator(ShotParams(v0=8.0, angle_deg=50.0, release_height=2.0,
+                                    distance=20.0, spin=4.0, drag=True,
+                                    magnus=True)).run()
+        windy = Simulator(ShotParams(v0=8.0, angle_deg=50.0, release_height=2.0,
+                                     distance=20.0, spin=4.0, drag=True,
+                                     magnus=True, wind_ax=0.8)).run()
+        self.assertGreater(windy.landing_x, calm.landing_x)
+
+
+class TestMovingHoop(unittest.TestCase):
+    """规则变体「移动篮筐」的物理：篮筐水平简谐移动。"""
+
+    # 静态下这组出手弹后框（RIM_OUT，无筐穿越偏心 +0.128 @ t=0.89s）
+    PARAMS = dict(v0=8.0, angle_deg=46.0, release_height=2.0,
+                  distance=4.19, spin=6.0)
+
+    def test_static_misses(self):
+        r = Simulator(ShotParams(**self.PARAMS)).run()
+        self.assertEqual(r.label, "RIM_OUT")
+
+    def test_moving_hoop_catches_it(self):
+        # 周期 4s，相位使篮筐在穿越时刻后撤 +9cm，把球包进开口
+        phase = math.pi / 2 - 2 * math.pi * 0.89 / 4.0
+        p = ShotParams(rim_amp=0.09, rim_period=4.0, rim_phase=phase, **self.PARAMS)
+        r = Simulator(p).run()
+        self.assertTrue(r.scored, msg=f"label={r.label}")
+        self.assertLess(abs(r.crossed_rel), 0.09)
+
+    def test_geometry_override(self):
+        # 小筐 + 月球重力：几何/重力参数化生效（射程在低重力下更远）
+        low_g = Simulator(ShotParams(v0=8.0, angle_deg=45.0, release_height=1.0,
+                                     distance=20.0, spin=0.0, drag=False,
+                                     magnus=False, gravity=5.4)).run()
+        normal = Simulator(VACUUM).run()
+        self.assertGreater(low_g.landing_x, normal.landing_x)
+
 
 class TestCollisions(unittest.TestCase):
     def test_board_bounce_loses_energy(self):

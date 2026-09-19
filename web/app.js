@@ -60,7 +60,7 @@ function resolveRect(s,o){
 }
 function hoopScore(s,prev){
  const h=current().hoop;
- const crossed=prev.x<h.x&&s.x>=h.x&&Math.abs(s.y-h.y)<28&&s.vy>0;
+ const crossed=prev.y<h.y&&s.y>=h.y&&s.vy>0&&s.x>h.x-34&&s.x<h.x+34;
  return crossed;
 }
 function shoot(a,p){

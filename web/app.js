@@ -8,7 +8,9 @@ const ui={
  levelTag:document.getElementById("levelTag"),levelName:document.getElementById("levelName"),levelGoal:document.getElementById("levelGoal"),
  goalText:document.getElementById("goalText"),attemptMeter:document.getElementById("attemptMeter"),attemptText:document.getElementById("attemptText"),
  distance:document.getElementById("labDistance"),apex:document.getElementById("labApex"),collision:document.getElementById("labCollision"),
- outcome:document.getElementById("labOutcome"),diagnosis:document.getElementById("diagnosis")
+ outcome:document.getElementById("labOutcome"),diagnosis:document.getElementById("diagnosis"),
+ buildSummary:document.getElementById("buildSummary"),buildList:document.getElementById("buildList"),
+ rewardModal:document.getElementById("rewardModal"),rewardList:document.getElementById("rewardList")
 };
 
 const levels=[
@@ -19,17 +21,28 @@ const levels=[
  {name:"时机",goal:"等待移动障碍打开路线",tip:"移动障碍是时间问题：角度正确还不够，要抓住窗口。",hoop:{x:1080,y:365},obs:[{t:"bar",x:640,y:350,w:34,h:145,move:true},{t:"wall",x:870,y:310,w:34,h:260}]}
 ];
 
-let level=0,levelShots=0,totalShots=0,made=0,spin=0,drag=null,ball=null,preview=[],lastShot=null,advanceTimer=null;
+let level=0,levelShots=0,totalShots=0,made=0,spin=0,drag=null,ball=null,preview=[],lastShot=null,advanceTimer=null,runEnded=false,secondChanceUsed=false;
+const build={spinMaster:0,bankShot:0,secondChance:0};
+const REWARDS=[
+ {id:"spinMaster",name:"旋转大师",desc:"反弹时旋转影响 ×1.8。主动利用旋转改变路线。",tag:"改变反弹方向"},
+ {id:"bankShot",name:"银行球",desc:"篮板/支架碰撞损失降低。打板路线更容易保留速度。",tag:"改变碰撞能量"},
+ {id:"secondChance",name:"二次机会",desc:"每关第一次触碰篮筐区域后，获得一次额外向上反弹容错。",tag:"改变容错方式"}
+];
 let levelStartedAt=performance.now(),lastTime=performance.now(),movingClock=0;
 
 function current(){return levels[level]}
 function ballStart(){return{x:START.x,y:START.y,vx:0,vy:0,active:false,t:0,path:[],collisions:0}}
+function renderBuild(){
+ const names=REWARDS.filter(r=>build[r.id]>0).map(r=>r.name+" ×"+build[r.id]);
+ ui.buildSummary.textContent=names.length?names.join(" · "):"基础投篮";
+ ui.buildList.innerHTML=names.map(n=>`<span class="build-chip">${n}</span>`).join("");
+}
 function reset(){
  if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null}
- ball=null;drag=null;preview=[];lastShot=null;levelShots=0;levelStartedAt=performance.now();
+ ball=null;drag=null;preview=[];lastShot=null;levelShots=0;levelStartedAt=performance.now();secondChanceUsed=false;
  ui.result.textContent="准备出手";ui.detail.textContent=current().tip;ui.tip.textContent="拖动篮球：方向 = 角度，距离 = 力量；滚轮 = 旋转";
  ui.level.textContent=level+1;ui.levelTag.textContent="LEVEL "+(level+1);ui.levelName.textContent=current().name;ui.levelGoal.textContent=current().goal;
- ui.goalText.textContent=current().goal;updateAttemptUI();updateLab(null);draw();
+ ui.goalText.textContent=current().goal;updateAttemptUI();updateLab(null);renderBuild();draw();
 }
 function updateAttemptUI(){
  ui.attempts.textContent=levelShots;ui.attemptMeter.style.width=(levelShots/MAX_ATTEMPTS*100)+"%";
@@ -50,11 +63,12 @@ function circleRect(s,o){
 function resolveRect(s,o){
  const left=Math.abs((s.x+BALL_R)-o.x),right=Math.abs((o.x+o.w)-(s.x-BALL_R));
  const top=Math.abs((s.y+BALL_R)-o.y),bottom=Math.abs((o.y+o.h)-(s.y-BALL_R)),m=Math.min(left,right,top,bottom);
- if(m===left){s.x=o.x-BALL_R;s.vx=-Math.abs(s.vx)*.78}
- else if(m===right){s.x=o.x+o.w+BALL_R;s.vx=Math.abs(s.vx)*.78}
- else if(m===top){s.y=o.y-BALL_R;s.vy=-Math.abs(s.vy)*.78}
- else{s.y=o.y+o.h+BALL_R;s.vy=Math.abs(s.vy)*.78}
- s.vx+=spin*18
+ const restitution=Math.min(.96,.78+build.bankShot*.07);
+ if(m===left){s.x=o.x-BALL_R;s.vx=-Math.abs(s.vx)*restitution}
+ else if(m===right){s.x=o.x+o.w+BALL_R;s.vx=Math.abs(s.vx)*restitution}
+ else if(m===top){s.y=o.y-BALL_R;s.vy=-Math.abs(s.vy)*restitution}
+ else{s.y=o.y+o.h+BALL_R;s.vy=Math.abs(s.vy)*restitution}
+ s.vx+=spin*18*(1+build.spinMaster*.8)
 }
 function boardRect(){const h=current().hoop;return{x:h.x+55,y:h.y-85,w:12,h:120}}
 function hoopScore(s,prev){
@@ -62,13 +76,14 @@ function hoopScore(s,prev){
  return crossed
 }
 function simulate(v,startTime=movingClock,steps=300){
- let s={x:START.x,y:START.y,vx:v.vx,vy:v.vy},path=[],hits=0,apex=s.y;
+ let s={x:START.x,y:START.y,vx:v.vx,vy:v.vy},path=[],hits=0,apex=s.y,rimTouched=false;
  for(let i=0;i<steps;i++){
    const t=startTime+i/60;s.vy+=G/60;s.x+=s.vx/60;s.y+=s.vy/60;apex=Math.min(apex,s.y);
    if(s.y+BALL_R>GROUND){s.y=GROUND-BALL_R;s.vy*=-.64;s.vx*=.93;hits++}
    if(s.x-BALL_R<0){s.x=BALL_R;s.vx=Math.abs(s.vx)*.72;hits++}
    for(const o of obstacleSnapshot(t)){if(circleRect(s,o)){resolveRect(s,o);hits++}}
-   if(circleRect(s,boardRect())){resolveRect(s,boardRect());hits++}
+   if(circleRect(s,boardRect())){resolveRect(s,boardRect());hits++;
+     if(build.secondChance>0&&hits===1){s.vy=-Math.max(300,Math.abs(s.vy)*1.08);}}
    path.push({x:s.x,y:s.y});if(s.x>current().hoop.x+100||s.y>GROUND+100||hits>12)break
  }
  return{path,hits,apex}
@@ -95,13 +110,25 @@ function diagnose(scored,shot,collisionCount){
  if(target>900)return"路线接近成功：保持大方向，只做小幅力量调整。";
  return"这次没有进筐。下一球只改一个变量，更容易找到原因。";
 }
+function showRewards(){
+ ui.rewardList.innerHTML=REWARDS.map(r=>`<button class="reward-option" data-reward="${r.id}"><strong>${r.name}</strong><span>${r.desc}</span><em>${r.tag} · 当前 ${build[r.id]} 层</em></button>`).join("");
+ ui.rewardModal.classList.remove("hidden");
+ ui.rewardList.querySelectorAll("[data-reward]").forEach(btn=>btn.onclick=()=>chooseReward(btn.dataset.reward));
+}
+function chooseReward(id){
+ build[id]++;ui.rewardModal.classList.add("hidden");renderBuild();ui.tip.textContent="构筑已加入 · 下一关开始";next();
+}
+function resetRun(){
+ if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null}
+ level=0;levelShots=0;totalShots=0;made=0;spin=0;runEnded=false;for(const k of Object.keys(build))build[k]=0;ui.made.textContent=0;ui.rewardModal.classList.add("hidden");reset();
+}
 function finish(scored,reason){
  const shot=lastShot;const collisions=ball?ball.collisions:0;ball=null;preview=[];
  if(scored)made++;
  ui.made.textContent=made;ui.result.textContent=scored?"SWISH!":"MISS";
  ui.detail.textContent=diagnose(scored,shot,collisions);
  updateLab(shot?{...shot,scored,collisions}:null);
- if(scored){ui.tip.textContent="LEVEL CLEAR · 下一关会引入新的物理问题";queueNext()}
+ if(scored){ui.tip.textContent="LEVEL CLEAR · 选择一个构筑，然后进入下一关";showRewards()}
  else if(levelShots>=MAX_ATTEMPTS){ui.tip.textContent="本关结束 · 点击“重置本关”再试一次";ui.result.textContent="OUT OF SHOTS"}
 }
 function queueNext(){if(advanceTimer)return;advanceTimer=setTimeout(()=>{advanceTimer=null;next()},ADVANCE_DELAY)}
@@ -162,7 +189,8 @@ function tick(now){
   if(ball.y+BALL_R>GROUND){ball.y=GROUND-BALL_R;ball.vy=-Math.abs(ball.vy)*.64;ball.vx*=.92;ball.collisions++}
   if(ball.x-BALL_R<0){ball.x=BALL_R;ball.vx=Math.abs(ball.vx)*.72;ball.collisions++}
   for(const o of obstacleSnapshot(ball.startTime+ball.t)){if(circleRect(ball,o)){resolveRect(ball,o);ball.collisions++}}
-  if(circleRect(ball,boardRect())){resolveRect(ball,boardRect());ball.collisions++}
+  if(circleRect(ball,boardRect())){resolveRect(ball,boardRect());ball.collisions++;
+   if(build.secondChance>0&&!secondChanceUsed){secondChanceUsed=true;ball.vy=-Math.max(300,Math.abs(ball.vy)*1.08);ui.detail.textContent="二次机会触发：第一次篮筐碰撞没有结束这球。";}}
   if(hoopScore(ball,prev))finish(true,"");
   else if(ball.t>4.8||ball.y>GROUND+80||ball.x>W+80||ball.collisions>9)finish(false,"")
  }
@@ -173,6 +201,6 @@ canvas.addEventListener("pointermove",e=>{if(drag)drag=pointer(e)});
 canvas.addEventListener("pointerup",e=>{if(!drag)return;const p=pointer(e),a=getAim(p);drag=null;if(a.len<18)return;shoot(a.angle,a.power)});
 canvas.addEventListener("pointercancel",()=>{drag=null});
 canvas.addEventListener("wheel",e=>{e.preventDefault();spin=Math.max(-8,Math.min(8,spin+(e.deltaY<0?.5:-.5)));ui.spin.textContent=spin.toFixed(1)},{passive:false});
-document.getElementById("reset").onclick=reset;document.getElementById("next").onclick=next;
-ui.made.textContent=made;reset();requestAnimationFrame(tick);
+document.getElementById("reset").onclick=reset;document.getElementById("resetRun").onclick=resetRun;document.getElementById("next").onclick=next;
+ui.made.textContent=made;renderBuild();reset();requestAnimationFrame(tick);
 if(typeof module!=="undefined")module.exports={levels,current,reset,shoot,simulate,hoopScore,next};

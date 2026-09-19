@@ -1,150 +1,50 @@
-# 🧪 BasketballPhysics — SHOT LAB + 斗球实验室
+# BasketballPhysics
 
-> 2D 篮球投篮物理实验室 + 游戏化版本《斗球实验室 SHOT DUEL》。
-> 纯 Python 标准库实现，零依赖即可运行（tkinter 动画为标准库自带）。
+两个东西住在这个仓库里：一座投篮物理实验室（SHOT LAB），和把它游戏化的
+对决小游戏（斗球实验室 SHOT DUEL）。纯 Python 标准库，零第三方依赖。
 
-## 🎮 斗球实验室 SHOT DUEL（游戏模式）
+## 快速上手
 
-策划书见 [docs/DESIGN.md](docs/DESIGN.md)。核心卖点：**物理读数就是计分板**
-（偏心 ≤3cm 且入射角 40°~55° = PERFECT 3 分）。
-
-```bash
-python -m shotduel                       # 单人生存赛季（tkinter 火柴人动画）
-python -m shotduel --mode duel           # 双人热座对决（输家挑场地，篮筐会"记住"）
-python -m shotduel --cli                 # 终端退化模式
-python -m shotduel --selftest            # 无头自检
-
-操作：**鼠标移动瞄准弧度 · 按住空格蓄力（1.1s 充满，过充泄力）· 松开出手** ·
-←→ 后旋微调（三个输入通道互相独立，挑战性来自执行力而非随机数）
-```
-
-每回合随机规则变体（风/移动篮筐/小筐/月球重力/浓雾…，只改物理参数）+
-抽 1 张变数卡（有好有坏，改变执行噪声/几何/倍率）。单人 5 回合结算总分；
-双人先拿 3 个回合胜场获胜。
-
-## 🧪 物理实验室模式（SHOT LAB）
-
-```text
-                                                                    ▌         ← 篮板
-                             ························               ▌
-                        ······                       ······         ▌
-                   ·····                                  ·····     ▌
-                ····                                       ●──────● ▌         ← RIM 3.05 m
-             ····
-          ····
-       ····
-     ◎··
-─────┴─────────────┴─────────────┴────────────┴─────────────┴────────────┴──
-     0             1             2            3             4            5
-
-  ── SHOT LAB ────────────────────────────────────────────
-   Velocity     7.55 m/s        Drag    ON
-   Angle        52.5 °          Magnus  ON
-   Release h    2.00 m          Spin    6.0 rad/s
-   Distance     4.19 m          dt      2.0 ms
-  ─────────────────────────────────────────────────
-   RESULT     SWISH ✓✓  空心入网
-   Flight       0.98 s          Apex    3.75 m
-   Entry         5.5 m/s @  41.7°   偏心 +0.003 m
-  ─────────────────────────────────────────────────
-   Probability
-   ██████████████░░░░░░   68.5%
-   (n=200, swish 27.5%, σ_v0=0.12 m/s, σ_θ=0.8°)
-```
-
-## 快速开始
-
-```bash
-cd BasketballPhysics
-
-# 单次出手（默认 = 罚球线空心球），附带 300 次蒙特卡洛
-python -m shotlab shot
-
-# 三个经典出手：罚球 / 打板 / 三分
-python -m shotlab demo
-
-# 交互式实验室（run / mc / sweep / set v0 8.0 …）
-python -m shotlab interactive
-
-# 蒙特卡洛命中率实验
-python -m shotlab mc --n 400 --sig-v0 0.15
-
-# 速度 × 仰角 命中地图
-python -m shotlab sweep
-
-# 保存轨迹 PNG（需要 pip install matplotlib）
-python -m shotlab plot --out shots/ft.png
-
-# 测试
-python -m unittest discover -s tests
-```
-
-## 物理模型
-
-**几何**（FIBA/NBA 标准尺寸，`constants.py`）：
-
-| 参数 | 值 |
+| 你想做什么 | 命令 |
 |---|---|
-| 篮筐高度 | 3.05 m |
-| 筐内径 | 45.72 cm（半径 0.2286 m） |
-| 筐圈圆管截面半径 | 1.6 cm |
-| 筐心距篮板面 | 0.375 m |
-| 篮板 | 2.90 ~ 3.95 m |
-| 球 | 质量 0.624 kg，半径 0.12 m |
+| 玩单人挑战（蓄力+鼠标瞄准） | `python -m shotduel` |
+| 两个人同屏对决 | `python -m shotduel --mode duel` |
+| 没有图形环境时玩 | `python -m shotduel --cli` |
+| 做物理实验（单次出手/命中率/参数扫描） | `python -m shotlab shot` / `mc` / `sweep` |
+| 看三个经典出手 | `python -m shotlab demo` |
+| 跑全部测试 | `python -m unittest discover -s tests` |
+| 无头自检（CI/排障） | `python -m shotduel --selftest` |
 
-**动力学**（RK4 积分，默认步长 2 ms）：
+## SHOT DUEL：为什么值得一玩
 
-* 重力 + 空气阻力 `F_d = -½·ρ·Cd·A·|v|·v`（Cd = 0.50）
-* Magnus 力（后旋升力）`F_m = ½·ρ·Cl·A·|v|²·(ẑ×v̂)`，升力系数取旋转球经验拟合 `Cl = 1/(2 + v/(r·ω))`
-* 后旋在飞行中保持恒定，仅在碰撞时通过摩擦力矩改变
+计分板不是"进/不进"，而是物理读数本身：偏心 3cm 以内且入射角落在
+40°~55° 才是满分 PERFECT。三个输入通道彼此独立——
 
-**碰撞**：
+* 鼠标移动决定瞄准弧度；
+* 按住空格蓄力，1.1 秒充满，过充会缓慢泄力；
+* 左右方向键调后旋。
 
-* 篮板 = 竖直线段，法向恢复系数 0.70；筐前/后沿 = 圆管截面（圆-圆碰撞），恢复系数 0.45
-* 切向摩擦会同时改变线速度和自旋（球在筐上会"咬"住旋转）
-* 校验过的物理事实：模型给出的罚球所需出手速度 ≈ 7.5 m/s，与真实测量值（7.3~7.9 m/s）一致
+失败永远可以归因：是力度、角度还是旋转出了问题。
 
-**得分判定**：
+每回合随机一个规则变体（风、移动篮筐、小筐、月球重力、浓雾等十种，
+全部是真实物理参数），再抽一张变数卡——有好有坏，"打滑的手"让高手
+也会手抖，"赌徒"得分翻倍但不中倒扣。双人对决的互动是物理的：
+球进一次篮筐基座就漂移一截，输家挑下一块场地。
 
-* 球心自上而下穿过筐平面，且位于前/后筐点之间 → 得分（空心 / 弹框入 / 打板入）
-* 球自下而上穿过筐平面 → 违例，不得分（对应真实规则）
-* 触地未进即终止（2D 模型中地面反弹不可能再达到筐高度）
+## SHOT LAB：实验室模式
 
-**结果分类**：`SWISH 空心入网` / `RIM_IN 弹框入筐` / `BANK_IN 打板入筐` / `RIM_OUT 弹框不中` / `BOARD_MISS 打板不中` / `AIRBALL_SHORT/LONG 三不沾` / `VIOLATION 违例`
+默认出手就是一记罚球线空心球。`shot` 命令输出轨迹画布、参数面板、
+事件时间线，并附带蒙特卡洛命中率；`sweep` 画出速度×仰角的"命中岛"。
 
-## 蒙特卡洛命中率
+物理上值得一提的一点：模型算出罚球需要约 7.55 m/s 的出手速度，
+与真实测量区间（7.3~7.9 m/s）吻合。引擎支持恒定风、篮筐简谐移动、
+重力/筐径/筐高/球径/质量参数化，13 项引擎测试含解析解对照。
 
-给名义出手叠加"手感噪声"（默认 σ_v0=0.12 m/s，σ_θ=0.8°，σ_h=0.04 m，σ_ω=0.5 rad/s），
-重复 N 次模拟统计命中率。默认噪声下罚球线空心球命中率约 **67%**，接近真实球员水平。
+## 更多文档
 
-> ⚠️ 局限：本实验室是 **2D 侧视模型**，没有横向（左右偏移）误差维度，
-> 因此绝对命中率偏乐观；适合研究纵向参数敏感性，不适合直接当作真实命中率。
-
-## 项目结构
-
-```text
-BasketballPhysics/
-├── shotlab/
-│   ├── constants.py    # 物理与球场几何常量
-│   ├── params.py       # 出手参数 + 经典出手预设
-│   ├── engine.py       # RK4 物理引擎 + 碰撞 + 得分判定
-│   ├── render_ascii.py # ASCII 画布 + SHOT LAB 面板
-│   ├── render_plot.py  # matplotlib 绘图（可选）
-│   ├── monte_carlo.py  # 命中率实验
-│   ├── sweep.py        # 参数扫描
-│   └── cli.py          # 命令行入口
-├── tests/              # 13 个测试：解析解对照 / 碰撞 / 得分 / 实验
-├── examples/tune.py    # 网格搜索经典出手参数
-└── ROADMAP.md          # 里程碑与 Issue 列表
-```
-
-## 与 HoopEvolution 的关系
-
-本项目的 `Simulator` 就是未来 **HoopEvolution**（CSI + Evolution 合体）的
-**比赛模拟器底座**：进化算法生成战术 → 战术分解为出手参数分布 → 用本引擎推演命中分布 →
-作为 reward 反馈给进化循环。
-
-详见 [ROADMAP.md](ROADMAP.md) 与上级 [BASKETBALL_ROADMAP.md](../BASKETBALL_ROADMAP.md)。
+* 游戏策划书：`docs/DESIGN.md`
+* 实验室路线图：`ROADMAP.md`
+* 上级总路线图：`../BASKETBALL_ROADMAP.md`
 
 ## License
 

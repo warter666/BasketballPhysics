@@ -658,7 +658,7 @@ class ShotDuelApp:
             else:
                 bits.append(f"总分 {self.session.total}")
                 if self.session.streak > 1:
-                    bits.append(f"🔥连击 x{self.session.streak}")
+                    bits.append(f"连击 x{self.session.streak}")
             if abs(p.wind_ax) > 1e-6:
                 bits.append(f"风 {p.wind_ax:+.1f} m/s²")
             if moving:

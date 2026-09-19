@@ -111,7 +111,7 @@ def cmd_demo(_args) -> int:
     for name in ("free_throw", "bank", "three"):
         pre = PRESETS[name]
         p = preset_params(name)
-        print(f"\n{'═' * 66}\n  🏀 {name}  —  {pre['label']}\n{'═' * 66}")
+        print(f"\n{'═' * 66}\n  {name}  —  {pre['label']}\n{'═' * 66}")
         mc = run_mc(p, n=200, seed=13)
         _print_shot(p, mc=mc, show_timeline=(name != "three"))
     return 0

@@ -129,7 +129,7 @@ class ShotDuelApp:
         self.last_shot = ""                # 教练行：上一投参数与结果
 
         # ---- 流程状态 ----
-        self.phase = "boot"      # intro/aim/anim/result/pass/pick/end
+        self.phase = "boot"      # intro/aim/anim/result/upgrade/pass/pick/end
         self.t_round = 0.0
         self.fly = None
         self.particles = []
@@ -153,6 +153,9 @@ class ShotDuelApp:
             self._start_round()
 
     def _start_round(self):
+        if (not self.is_duel and self.session.awaiting_upgrade):
+            self._phase_upgrade()
+            return
         if self.is_duel and self.session.round is None:
             if self.session.need_rule_pick():
                 self._phase_pick(f"{self.session.names[self.session.next_chooser]} "
@@ -296,6 +299,8 @@ class ShotDuelApp:
         else:
             if self.session.finished:
                 self._phase_end()
+            elif self.session.awaiting_upgrade:
+                self._phase_upgrade()
             else:
                 self.session.start_round()
                 self.t_round = 0.0
@@ -307,6 +312,29 @@ class ShotDuelApp:
                 self._stop_charge()
                 self._phase_intro()
 
+    def _phase_upgrade(self):
+        self.phase = "upgrade"
+        self.overlay_title = "选择你的本局构筑"
+        self.overlay_lines = [
+            f"生命 {self.session.hp}/{self.session.max_hp} · 筹码 {self.session.coins}",
+            f"当前构筑：{self.session.build_text}",
+            "升级会持续到本局结束；每种最多叠加 3 次。",
+        ]
+
+    def _choose_upgrade(self, idx):
+        try:
+            self.session.choose_upgrade(idx)
+        except (RuntimeError, IndexError):
+            return
+        self.t_round = 0.0
+        self.spin = 6.0
+        self.aim_deg = 50.0
+        self._aim_raw = 50.0
+        self.last_traj = None
+        self.last_shot = ""
+        self._stop_charge()
+        self._start_round()
+
     def _phase_end(self):
         self.phase = "end"
         if self.is_duel:
@@ -317,7 +345,11 @@ class ShotDuelApp:
                      f"总得分 {self.session.total_pts[0]}:"
                      f"{self.session.total_pts[1]}"]
         else:
-            lines = self.session.summary().split("\n")
+            lines = [
+                ("🏆 本局通关！" if self.session.won else "💥 本局结束"),
+                f"生命 {self.session.hp}/{self.session.max_hp} · 筹码 {self.session.coins}",
+                f"构筑：{self.session.build_text}",
+            ] + self.session.summary().split("\n")
         lines.append("空格 = 再来一局   Esc = 退出")
         self._overlay("比赛结束", lines)
 
@@ -328,6 +360,7 @@ class ShotDuelApp:
         self.root.bind("<MouseWheel>", self._on_wheel)
         c = self.canvas
         c.bind("<Motion>", self._on_motion)
+        c.bind("<Button-1>", self._on_click)
 
     def _on_wheel(self, ev):
         if self.phase == "aim":
@@ -337,6 +370,15 @@ class ShotDuelApp:
     def _on_motion(self, ev):
         self.mouse = (ev.x, ev.y)
         self._aim_from_mouse()
+
+    def _on_click(self, ev):
+        if self.phase != "upgrade":
+            return
+        for i in range(len(self.session.offers)):
+            bx = 220 + i * 235
+            if bx <= ev.x <= bx + 215 and 310 <= ev.y <= 430:
+                self._choose_upgrade(i)
+                return
 
     def _on_key(self, ev):
         key = ev.keysym
@@ -361,6 +403,10 @@ class ShotDuelApp:
         if self.phase == "pick":
             if key in ("1", "2", "3"):
                 self._choose(int(key) - 1)
+            return
+        if self.phase == "upgrade":
+            if key in ("1", "2", "3"):
+                self._choose_upgrade(int(key) - 1)
             return
         if self.phase == "aim":
             if key == "space":
@@ -468,7 +514,7 @@ class ShotDuelApp:
             self._draw_ball_flight(fog)
         self._draw_meter()
         self._draw_hud()
-        if self.phase in ("intro", "result", "pass", "pick", "end"):
+        if self.phase in ("intro", "result", "pass", "pick", "upgrade", "end"):
             self._draw_overlay()
 
     def _draw_court(self):
@@ -728,6 +774,8 @@ class ShotDuelApp:
                 bits.append(f"篮筐漂移 {self.session.hoop_shift:+.2f} m")
             else:
                 bits.append(f"总分 {self.session.total}")
+                bits.append(f"HP {self.session.hp}/{self.session.max_hp}")
+                bits.append(f"🪙 {self.session.coins}")
                 if self.session.streak > 1:
                     bits.append(f"连击 x{self.session.streak}")
             if abs(p.wind_ax) > 1e-6:
@@ -774,6 +822,20 @@ class ShotDuelApp:
                                tags=f"opt{i}")
                 cv.create_text(bx + 100, 404, text="★" * rule.stars, fill=C_HOOP,
                                font=("Consolas", 11), tags=f"opt{i}")
+        elif self.phase == "upgrade":
+            for i, up in enumerate(self.session.offers):
+                bx = 220 + i * 235
+                cv.create_rectangle(bx, 310, bx + 215, 430,
+                                    fill="#1b2430", outline=C_ACCENT, width=2,
+                                    tags=f"up{i}")
+                cv.create_text(bx + 107, 338, text=f"[{i + 1}] {up.icon} {up.name}",
+                               fill="#ffd479", font=("Microsoft YaHei UI", 14, "bold"),
+                               tags=f"up{i}")
+                cv.create_text(bx + 107, 380, text=up.desc, fill="#aebbc8",
+                               font=("Microsoft YaHei UI", 11), width=200, tags=f"up{i}")
+                cv.create_text(bx + 107, 414,
+                               text=f"已叠 {self.session.upgrade_counts.get(up.id, 0)}/{up.max_stacks}",
+                               fill="#7fd4ff", font=("Consolas", 10), tags=f"up{i}")
                 cv.tag_bind(f"opt{i}", "<Button-1>",
                             lambda _e, i=i: self._choose(i))
         else:

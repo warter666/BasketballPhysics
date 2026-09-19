@@ -11,7 +11,7 @@
     <section class="game-wrap">
       <canvas id="game" width="1280" height="720"></canvas>
       <div class="tip" id="tip">拖动篮球：方向 = 角度，距离 = 力量；滚轮 = 旋转</div>
-      <div class="reward-modal hidden" id="rewardModal"><div class="reward-box"><span class="label">BUILD REWARD</span><h2>选择一个物理构筑</h2><p>奖励会改变下一关的投法，而不是直接增加命中率。</p><div class="reward-list" id="rewardList"></div></div></div>
+      <div class="reward-modal hidden" id="rewardModal"><div class="reward-box"><span class="label" id="modalLabel">BUILD REWARD</span><h2 id="modalTitle">选择一个物理构筑</h2><p id="modalText">奖励会改变下一关的投法，而不是直接增加命中率。</p><div class="reward-list" id="rewardList"></div></div></div>
       <div class="level-banner" id="levelBanner">
         <span id="levelTag">LEVEL 1</span><b id="levelName">起点</b>
         <small id="levelGoal">学会控制基础角度与力量</small>
@@ -25,7 +25,8 @@
           <h1>SHOT DUEL <span>SHOOTING LAB</span></h1>
         </div>
         <div class="stats">
-          <div><b id="level">1</b><small>LEVEL</small></div>
+          <div><b id="level">1</b><small>NODE</small></div>
+          <div><b id="hp">3</b><small>HP</small></div>
           <div><b id="attempts">0</b><small>SHOTS</small></div>
           <div><b id="made">0</b><small>MADE</small></div>
         </div>
@@ -49,6 +50,8 @@
           <span class="sub" id="detail">先观察障碍，再规划轨迹。</span>
         </div>
       </section>
+
+      <section class="run-card"><div class="run-head"><span class="label">RUN MAP</span><b id="runStatus">NODE 1 / 10</b></div><div class="run-map" id="runMap"></div></section>
 
       <section class="build-card"><div><span class="label">CURRENT BUILD</span><b id="buildSummary">基础投篮</b></div><div class="build-list" id="buildList"></div></section>
 

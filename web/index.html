@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SHOT DUEL · Physics Prototype</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">BASKETBALL PHYSICS</div>
+        <h1>SHOT DUEL <span>v0.3</span></h1>
+      </div>
+      <div class="stats">
+        <div><b id="level">1</b><small>LEVEL</small></div>
+        <div><b id="attempts">0</b><small>SHOTS</small></div>
+        <div><b id="made">0</b><small>MADE</small></div>
+      </div>
+    </header>
+
+    <section class="game-wrap">
+      <canvas id="game" width="1280" height="720"></canvas>
+      <div class="tip" id="tip">拖动篮球：方向 = 角度，距离 = 力量；滚轮 = 旋转</div>
+    </section>
+
+    <section class="controls">
+      <div class="control-card">
+        <span class="label">AIM</span><strong id="angle">45.0°</strong>
+        <span class="sub">鼠标拖动</span>
+      </div>
+      <div class="control-card">
+        <span class="label">POWER</span><strong id="power">0%</strong>
+        <span class="sub">拖动距离</span>
+      </div>
+      <div class="control-card">
+        <span class="label">SPIN</span><strong id="spin">0.0</strong>
+        <span class="sub">滚轮调整</span>
+      </div>
+      <div class="control-card result">
+        <span class="label">COACH</span><strong id="result">准备出手</strong>
+        <span class="sub" id="detail">先观察障碍，再规划轨迹。</span>
+      </div>
+      <button id="reset">重置本关</button>
+      <button id="next" class="primary">下一关</button>
+    </section>
+
+    <section class="lab">
+      <div><b>SHOOTING LAB</b><span>每一球都留下可学习的数据</span></div>
+      <div class="lab-grid">
+        <span>距离 <b id="labDistance">—</b></span>
+        <span>最高点 <b id="labApex">—</b></span>
+        <span>首次碰撞 <b id="labCollision">—</b></span>
+        <span>结果 <b id="labOutcome">—</b></span>
+      </div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

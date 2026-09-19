@@ -16,11 +16,13 @@ from .session import DuelSession, SoloSession
 FPS = 30
 DT_FRAME = 1.0 / FPS
 
-# 操控参数（策划书 §8 v0.2）
-CHARGE_TIME = 1.1          # s，0 → 满力
-V0_MIN, V0_MAX = 1.5, 13.5
-OVERCHARGE_DECAY = 0.25    # 满力后泄力速率（power/s）
-OVERCHARGE_FLOOR = 0.60
+# 操控参数（策划书 §8 v0.3：慢蓄力 + 可归因的瞄准辅助）
+CHARGE_TIME = 2.8          # s，0 → 满力（前快后慢，常用力度区斜率 ≈3 m/s 每秒）
+CHARGE_EASE = 0.7          # v0 = V0_MIN + 范围 * power^CHARGE_EASE
+V0_MIN, V0_MAX = 3.5, 13.5
+OVERCHARGE_DECAY = 0.18    # 满力后泄力速率（power/s）
+OVERCHARGE_FLOOR = 0.55
+AIM_SMOOTH = 0.45          # 鼠标角度平滑系数（消手抖）
 
 # 调色板（画面清晰度重制）
 C_BG = "#0e1420"
@@ -42,6 +44,8 @@ C_WIND_POS = "#5dade2"
 C_WIND_NEG = "#ec7063"
 C_METER = "#2ecc71"
 C_METER_HOT = "#e74c3c"
+C_FAN = "#2c3a4d"
+C_GHOST = "#41506b"
 
 W, H = 1120, 640
 
@@ -109,13 +113,20 @@ class ShotDuelApp:
         self.lbl_card = tk.Label(bar, text="", fg="#ffd479", bg=C_PANEL,
                                  font=("Microsoft YaHei UI", 11))
         self.lbl_card.pack(side="left", padx=10)
+        self.lbl_coach = tk.Label(bar, text="", fg="#9fb3c8", bg=C_PANEL,
+                                  font=("Microsoft YaHei UI", 10))
+        self.lbl_coach.pack(side="right", padx=10)
 
         # ---- 操控状态 ----
         self.mouse = (W * 0.55, H * 0.3)   # 画布像素
+        self.aim_deg = 50.0                # 当前仰角（平滑后）
+        self._aim_raw = 50.0               # 鼠标/按键给出的目标仰角
         self.charging = False
         self.charge_t = 0.0
         self.power = 0.0
         self.spin = 6.0
+        self.last_traj = None              # 上一投幽灵弹道
+        self.last_shot = ""                # 教练行：上一投参数与结果
 
         # ---- 流程状态 ----
         self.phase = "boot"      # intro/aim/anim/result/pass/pick/end
@@ -153,6 +164,10 @@ class ShotDuelApp:
         self.t_round = 0.0
         self.player = 0
         self.spin = 6.0
+        self.aim_deg = 50.0
+        self._aim_raw = 50.0
+        self.last_traj = None
+        self.last_shot = ""
         self._stop_charge()
         self._phase_intro()
 
@@ -206,6 +221,9 @@ class ShotDuelApp:
         result, score = self.session.shoot(
             v0, self.aim_angle(), self.spin,
             player=self.player, rim_phase=rim_phase)
+        self.last_traj = result.trajectory
+        self.last_shot = (f"上一投 {self.aim_angle():.1f}° / {v0:.1f} m/s"
+                          f" → {result.label_cn}（{score.pts:+d} 分）")
         self.fly_phase = rim_phase if rim_phase is not None else params.rim_phase
         self.fly = dict(result=result, score=score, t=0.0, released=False,
                         traj=result.trajectory, dt=params.dt, seam=0.0,
@@ -213,13 +231,23 @@ class ShotDuelApp:
         self.phase = "anim"
 
     def aim_angle(self) -> float:
-        """鼠标位置 → 仰角（从出手点指向光标），5°~85°。"""
-        p = self._round().params_by_player[self.player]
+        return self.aim_deg
+
+    def _aim_from_mouse(self):
+        """鼠标位置 → 目标仰角（从出手点指向光标），5°~85°。"""
+        r = self._round()
+        if not r:
+            return
+        p = r.params_by_player[self.player]
         ox, oy = self._px(0.0, p.release_height)
         dx = self.mouse[0] - ox
         dy = oy - self.mouse[1]
-        ang = math.degrees(math.atan2(max(dy, 1.0), max(dx, 6.0)))
-        return min(85.0, max(5.0, ang))
+        self._aim_raw = min(85.0, max(5.0,
+                            math.degrees(math.atan2(max(dy, 1.0), max(dx, 6.0)))))
+
+    def _v0_of(self, power: float) -> float:
+        """蓄力时间 → 出手速度：前快后慢（p^0.7），常用力度区斜率 ≈3 m/s 每秒。"""
+        return V0_MIN + (V0_MAX - V0_MIN) * (power ** CHARGE_EASE)
 
     def _charge_power(self) -> float:
         if self.charge_t <= CHARGE_TIME:
@@ -236,7 +264,7 @@ class ShotDuelApp:
             self.charging = False
             return
         self.charging = False
-        self.fire_with(V0_MIN + (V0_MAX - V0_MIN) * self._charge_power())
+        self.fire_with(self._v0_of(self._charge_power()))
 
     def _stop_charge(self):
         self.charging = False
@@ -249,6 +277,10 @@ class ShotDuelApp:
             if len(r.results) < 2:
                 self.player = 1
                 self.spin = 6.0
+                self.aim_deg = 50.0
+                self._aim_raw = 50.0
+                self.last_traj = None
+                self.last_shot = ""
                 self._stop_charge()
                 self._overlay("交棒", [
                     f"把键盘交给 {self.session.names[1]}",
@@ -268,6 +300,10 @@ class ShotDuelApp:
                 self.session.start_round()
                 self.t_round = 0.0
                 self.spin = 6.0
+                self.aim_deg = 50.0
+                self._aim_raw = 50.0
+                self.last_traj = None
+                self.last_shot = ""
                 self._stop_charge()
                 self._phase_intro()
 
@@ -289,11 +325,18 @@ class ShotDuelApp:
     def _bind(self):
         self.root.bind("<Key>", self._on_key)
         self.root.bind("<KeyRelease>", self._on_keyup)
+        self.root.bind("<MouseWheel>", self._on_wheel)
         c = self.canvas
         c.bind("<Motion>", self._on_motion)
 
+    def _on_wheel(self, ev):
+        if self.phase == "aim":
+            self._aim_raw = min(85.0, max(5.0,
+                                self._aim_raw + (0.25 if ev.delta > 0 else -0.25)))
+
     def _on_motion(self, ev):
         self.mouse = (ev.x, ev.y)
+        self._aim_from_mouse()
 
     def _on_key(self, ev):
         key = ev.keysym
@@ -327,9 +370,9 @@ class ShotDuelApp:
             elif key == "Right":
                 self.spin = min(12.0, self.spin + 0.5)
             elif key == "Up":
-                self.mouse = (self.mouse[0], self.mouse[1] - 8)
+                self._aim_raw = min(85.0, self._aim_raw + 0.4)
             elif key == "Down":
-                self.mouse = (self.mouse[0], self.mouse[1] + 8)
+                self._aim_raw = max(5.0, self._aim_raw - 0.4)
 
     def _on_keyup(self, ev):
         if ev.keysym == "space" and self.charging:
@@ -346,6 +389,7 @@ class ShotDuelApp:
     # ------------------------------------------------------------------ 主循环
     def tick(self):
         self.t_round += DT_FRAME
+        self.aim_deg += (self._aim_raw - self.aim_deg) * AIM_SMOOTH
         if self.charging:
             self.charge_t += DT_FRAME
             self.power = self._charge_power()
@@ -386,7 +430,7 @@ class ShotDuelApp:
         r = self._round()
         p = r.params_by_player[self.player] if r else None
         d = (p.distance if p else 4.2)
-        v0 = (V0_MIN + (V0_MAX - V0_MIN) * self.power) if self.charging else 8.0
+        v0 = self._v0_of(self.power) if self.charging else 8.0
         g = (p.gravity if p else 9.81)
         h = (p.release_height if p else 2.0)
         apex = h + max(v0, 8.0) ** 2 / (2 * g)
@@ -567,12 +611,34 @@ class ShotDuelApp:
             cv.create_oval(bx - rb, by - rb, bx + rb, by + rb,
                            fill=C_BALL, outline=C_BALL_SEAM, width=2)
 
+    def _draw_fan(self, p):
+        """角度参考扇面 35°~65°：常驻的瞄准坐标系。"""
+        cv = self.canvas
+        s, _, _ = self._sx()
+        cx, cy = self._px(0.0, p.release_height)
+        r = 1.9 * s
+        cv.create_arc(cx - r, cy - r, cx + r, cy + r, start=-65, extent=30,
+                      style="arc", outline=C_FAN, width=2)
+        for adeg, tag in ((35, "35°"), (45, "45°"), (55, "55°"), (65, "65°")):
+            a = math.radians(adeg)
+            lx, ly = self._px(0.0 + 2.15 * math.cos(a),
+                              p.release_height + 2.15 * math.sin(a))
+            cv.create_text(lx, ly, text=tag, fill=C_FAN,
+                           font=("Consolas", 9, "bold"))
+
     def _draw_aim(self, fog):
         cv = self.canvas
         r = self._round()
         p = r.params_by_player[self.player]
         a = math.radians(self.aim_angle())
-        v0_now = (V0_MIN + (V0_MAX - V0_MIN) * self.power) if self.charging else 8.0
+        v0_now = self._v0_of(self.power) if self.charging else 8.0
+        self._draw_fan(p)
+        # 上一投幽灵弹道（无雾时常驻：每次出手都有参照系）
+        if self.last_traj and not fog:
+            for x, y in self.last_traj[::6]:
+                px, py = self._px(x, y)
+                cv.create_oval(px - 1.5, py - 1.5, px + 1.5, py + 1.5,
+                               fill=C_GHOST, outline="")
         # 瞄准线（虚线箭头，长度随力度）
         x0, y0 = self._px(0.15, p.release_height)
         ln = 1.0 + 1.4 * ((v0_now - V0_MIN) / (V0_MAX - V0_MIN))
@@ -592,7 +658,7 @@ class ShotDuelApp:
                                fill="#5dade2", outline="")
 
     def _draw_meter(self):
-        """蓄力条：左侧竖条，过充区变红。"""
+        """蓄力条：左侧竖条 + m/s 刻度，过充区变红。"""
         if self.phase != "aim":
             return
         cv = self.canvas
@@ -606,16 +672,21 @@ class ShotDuelApp:
         if fh > 0:
             cv.create_rectangle(mx + 2, mb - fh, mx + 16, mb - 2,
                                 fill=color, outline="")
-        for k in (0.25, 0.5, 0.75, 1.0):
-            yy = mb - int((mb - mt) * k)
+        # m/s 刻度（按 p^CHARGE_EASE 反解位置）
+        for v0 in (4, 6, 8, 10, 12):
+            pk = ((v0 - V0_MIN) / (V0_MAX - V0_MIN)) ** (1.0 / CHARGE_EASE)
+            if not 0 <= pk <= 1:
+                continue
+            yy = mb - int((mb - mt) * pk)
             cv.create_line(mx, yy, mx + 22, yy, fill=C_DIM)
+            cv.create_text(mx + 30, yy, text=str(v0), fill=C_DIM,
+                           font=("Consolas", 9))
         label = "泄力!" if hot else ("蓄力中…" if self.charging else "力度")
         cv.create_text(mx + 9, mt - 18, text=label, fill=(C_METER_HOT if hot else C_HUD),
                        font=("Microsoft YaHei UI", 10, "bold"))
         if self.charging:
-            v0 = V0_MIN + (V0_MAX - V0_MIN) * self.power
-            cv.create_text(mx + 9, mb + 18, text=f"{v0:.1f}", fill=C_HUD,
-                           font=("Consolas", 11, "bold"))
+            cv.create_text(mx + 9, mb + 18, text=f"{self._v0_of(self.power):.1f}",
+                           fill=C_HUD, font=("Consolas", 11, "bold"))
 
     def _draw_ball_flight(self, fog):
         f = self.fly
@@ -670,9 +741,10 @@ class ShotDuelApp:
             cv.create_text(W / 2, 22, text="  ·  ".join(bits), fill=C_HUD,
                            font=("Microsoft YaHei UI", 14, "bold"))
         ang = self.aim_angle() if r else 0
-        v0_now = (V0_MIN + (V0_MAX - V0_MIN) * self.power) if self.charging else 8.0
+        v0_now = self._v0_of(self.power) if self.charging else 8.0
         self.lbl_aim.config(text=f"力度 {v0_now:5.2f} m/s   仰角 {ang:5.1f}°   "
                                  f"后旋 {self.spin:5.1f} rad/s")
+        self.lbl_coach.config(text=self.last_shot)
         if r:
             sk = r.skills[self.player]
             self.lbl_card.config(text=f"{sk.icon} {sk.name}：{sk.desc}")
@@ -738,7 +810,7 @@ def run_selftest() -> bool:
     for _ in range(16):          # ~0.53s
         app.tick()
     assert app.charging and abs(app.power - 0.53 / CHARGE_TIME) < 0.05
-    mid_v0 = V0_MIN + (V0_MAX - V0_MIN) * app.power
+    mid_v0 = app._v0_of(app.power)
     app._release_charge()
     assert app.phase == "anim", app.phase
     assert abs(app.fly["v0"] - mid_v0) < 1e-6

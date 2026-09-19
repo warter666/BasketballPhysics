@@ -108,7 +108,7 @@ function drawPlayer(){
 }
 function drawAim(d){
  const b=ball||ballStart(),a=getAim(d),len=a.len;ctx.setLineDash([8,7]);ctx.strokeStyle="#79c8ff";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x+Math.cos(a.angle)*len,b.y-Math.sin(a.angle)*len);ctx.stroke();ctx.setLineDash([]);
- ctx.fillStyle="#79c8ff";ctx.font="bold 14px monospace";ctx.fillText(a.angle*180/Math.PI.toFixed? (a.angle*180/Math.PI).toFixed(1)+"°":"",b.x+15,b.y-18);
+ ctx.fillStyle="#79c8ff";ctx.font="bold 14px monospace";ctx.fillText((a.angle*180/Math.PI).toFixed(1)+"°",b.x+15,b.y-18);
  ui.angle.textContent=(a.angle*180/Math.PI).toFixed(1)+"°";ui.power.textContent=Math.round(a.power*100)+"%";
  drawPreview(a.angle,a.power);
 }

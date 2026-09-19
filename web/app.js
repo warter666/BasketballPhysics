@@ -10,7 +10,7 @@ const ui={
  distance:document.getElementById("labDistance"),apex:document.getElementById("labApex"),collision:document.getElementById("labCollision"),
  outcome:document.getElementById("labOutcome"),diagnosis:document.getElementById("diagnosis"),
  buildSummary:document.getElementById("buildSummary"),buildList:document.getElementById("buildList"),
- rewardModal:document.getElementById("rewardModal"),rewardList:document.getElementById("rewardList")
+ rewardModal:document.getElementById("rewardModal"),rewardList:document.getElementById("rewardList"),modalLabel:document.getElementById("modalLabel"),modalTitle:document.getElementById("modalTitle"),modalText:document.getElementById("modalText")
 };
 
 const levels=[

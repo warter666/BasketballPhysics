@@ -23,10 +23,12 @@ global.performance = { now: () => nowMs };
 global.requestAnimationFrame = () => {};
 
 const game = require("./app.js");
+global.setTimeout = () => 0;   // 无头模式：不让过关定时器改变关卡
+global.clearTimeout = () => {};
 
-function tryShot(angleRad, power) {
+function tryShot(L, angleRad, power) {
   const before = Number(els.made.textContent);
-  game.reset();
+  game.loadLevel(L, 1);
   game.shoot(angleRad, power);
   let t = nowMs;
   for (let guard = 0; guard < 600 && els.result.textContent === "出手！"; guard++) {
@@ -36,18 +38,17 @@ function tryShot(angleRad, power) {
 }
 
 function checkLevel(L) {
-  while (Number(els.level.textContent) - 1 !== L) game.next();
   let solved = 0, total = 0, easiest = null;
   for (let power = 0.2; power <= 1.001; power += 0.04) {
     for (let deg = 20; deg <= 80; deg += 2) {
       total++;
-      if (tryShot(deg * Math.PI / 180, Number(power.toFixed(2)))) {
+      if (tryShot(L, deg * Math.PI / 180, Number(power.toFixed(2)))) {
         solved++;
         if (!easiest) easiest = { deg, power: Number(power.toFixed(2)) };
       }
     }
   }
-  return { name: game.current().name, solved, total, easiest };
+  return { name: game.levels[L].name, solved, total, easiest };
 }
 
 const rows = [];

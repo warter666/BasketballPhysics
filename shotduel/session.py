@@ -125,7 +125,11 @@ class SoloSession:
         return result, score
 
     def summary(self) -> str:
-        lines = [f"  生存赛季结束 · 总分 {self.total} · 最高连击 {self.best_streak}"]
+        perf = sum(1 for h in self.history if h[3] == 3)
+        swish = sum(1 for h in self.history if h[3] == 2)
+        lines = [f"  生存赛季结束 · 总分 {self.total} · 最高连击 {self.best_streak}",
+                 f"  执行档案: PERFECT {perf} · 空心 {swish} · "
+                 f"共 {len(self.history)} 投"]
         for i, (rule, skill, pts, stars, title) in enumerate(self.history, 1):
             lines.append(f"  R{i} {'★' * stars:<3} {title:<10} "
                          f"+{pts:>3} 分   [{rule} · {skill}]")

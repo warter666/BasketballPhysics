@@ -96,6 +96,8 @@
 ## 更多文档
 
 * 游戏策划书：`docs/DESIGN.md`
+* Web 版设计文档 v0.1（2D Physics Basketball Roguelike）：`docs/SHOTDUEL_DESIGN_v0.1.md`
+* Web 物理与教学原则：`docs/GAMEPLAY_V0.3.md`
 * 实验室路线图：`ROADMAP.md`
 * 上级总路线图：`../BASKETBALL_ROADMAP.md`
 

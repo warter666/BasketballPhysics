@@ -7,10 +7,10 @@ distance:document.getElementById("labDistance"),apex:document.getElementById("la
 
 const levels=[
  {name:"起点",hoop:{x:1080,y:365},obs:[]},
- {name:"弧高",hoop:{x:1080,y:365},obs:[{t:"bar",x:575,y:525,w:34,h:100}]},
+ {name:"弧高",hoop:{x:1080,y:365},obs:[{t:"bar",x:575,y:320,w:34,h:305}]},
  {name:"反弹",hoop:{x:1080,y:365},obs:[{t:"wall",x:700,y:300,w:34,h:270}]},
- {name:"通道",hoop:{x:1080,y:365},obs:[{t:"block",x:520,y:250,w:360,h:70},{t:"block",x:520,y:440,w:360,h:70},{t:"wall",x:880,y:250,w:34,h:260}]},
- {name:"时机",hoop:{x:1080,y:365},obs:[{t:"bar",x:640,y:480,w:34,h:145,move:true},{t:"wall",x:870,y:310,w:34,h:260}]}
+ {name:"通道",hoop:{x:1080,y:365},obs:[{t:"block",x:520,y:160,w:360,h:90},{t:"block",x:520,y:340,w:360,h:130},{t:"wall",x:880,y:0,w:34,h:250}]},
+ {name:"时机",hoop:{x:1080,y:365},obs:[{t:"bar",x:640,y:350,w:34,h:145,move:true},{t:"wall",x:870,y:310,w:34,h:260}]}
 ];
 let level=0,attempts=0,made=0,spin=0,drag=null,ball=null,preview=[],lastShot=null,lastTime=performance.now();
 
@@ -152,3 +152,4 @@ canvas.addEventListener("pointerup",e=>{if(!drag)return;const p=pointer(e),a=get
 canvas.addEventListener("wheel",e=>{e.preventDefault();spin=Math.max(-8,Math.min(8,spin+(e.deltaY<0?.5:-.5)));ui.spin.textContent=spin.toFixed(1)},{passive:false});
 document.getElementById("reset").onclick=reset;document.getElementById("next").onclick=next;
 ui.level.textContent=1;reset();requestAnimationFrame(tick);
+if(typeof module!=="undefined")module.exports={levels,current,reset,shoot,tick,next,hoopScore};

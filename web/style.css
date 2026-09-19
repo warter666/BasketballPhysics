@@ -36,3 +36,15 @@ button:hover{border-color:#647386}
 .lab-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 10px;margin-top:10px;color:var(--muted);font-size:11px}
 .lab-grid b{color:var(--text);margin-left:6px}
 @media(max-width:1150px){.side{width:280px}h1{font-size:18px}}
+
+.goal-card{padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.goal-card>div:first-child{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.goal-card b{font-size:12px}
+.attempt-meter{height:5px;margin-top:9px;background:#27313d;border-radius:99px;overflow:hidden}
+.attempt-meter span{display:block;height:100%;width:0;background:var(--accent);transition:width .2s ease}
+.goal-card small{display:block;margin-top:6px;color:var(--muted);font-size:10px}
+.diagnosis{margin-top:12px;padding:9px 10px;background:#10161e;border:1px solid #26313d;border-radius:8px;color:#aab7c4;font-size:11px;line-height:1.5}
+.level-banner{position:absolute;right:18px;top:14px;padding:9px 12px;background:#111823d9;border:1px solid #334050;border-radius:8px;min-width:220px;pointer-events:none}
+.level-banner span{color:var(--blue);font:10px monospace;letter-spacing:1px}
+.level-banner b{margin-left:8px;font-size:13px}
+.level-banner small{display:block;margin-top:3px;color:var(--muted);font-size:10px}

@@ -3,21 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SHOT DUEL · Physics Prototype</title>
+  <title>SHOT DUEL · Shooting Lab</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="app">
     <section class="game-wrap">
       <canvas id="game" width="1280" height="720"></canvas>
-      <div class="tip" id="tip">拖动篮球：方向 = 角度，距离 = 力量；滚轮 = 旋转；打板可以进球</div>
+      <div class="tip" id="tip">拖动篮球：方向 = 角度，距离 = 力量；滚轮 = 旋转</div>
+      <div class="level-banner" id="levelBanner">
+        <span id="levelTag">LEVEL 1</span><b id="levelName">起点</b>
+        <small id="levelGoal">学会控制基础角度与力量</small>
+      </div>
     </section>
 
     <aside class="side">
       <header class="topbar">
         <div>
           <div class="eyebrow">BASKETBALL PHYSICS</div>
-          <h1>SHOT DUEL <span>v0.3</span></h1>
+          <h1>SHOT DUEL <span>SHOOTING LAB</span></h1>
         </div>
         <div class="stats">
           <div><b id="level">1</b><small>LEVEL</small></div>
@@ -45,19 +49,26 @@
         </div>
       </section>
 
+      <section class="goal-card">
+        <div><span class="label">THIS LEVEL</span><b id="goalText">把球送进篮筐</b></div>
+        <div class="attempt-meter"><span id="attemptMeter"></span></div>
+        <small id="attemptText">本关最多 5 次尝试</small>
+      </section>
+
       <div class="btn-row">
         <button id="reset">重置本关</button>
         <button id="next" class="primary">下一关</button>
       </div>
 
       <section class="lab">
-        <div><b>SHOOTING LAB</b><span>每一球都留下可学习的数据</span></div>
+        <div><b>SHOOTING LAB</b><span>把失败变成可读的数据</span></div>
         <div class="lab-grid">
           <span>距离 <b id="labDistance">—</b></span>
           <span>最高点 <b id="labApex">—</b></span>
-          <span>首次碰撞 <b id="labCollision">—</b></span>
+          <span>碰撞 <b id="labCollision">—</b></span>
           <span>结果 <b id="labOutcome">—</b></span>
         </div>
+        <div class="diagnosis" id="diagnosis">每次出手后，这里会告诉你下一球该观察什么。</div>
       </section>
     </aside>
   </main>

@@ -887,9 +887,11 @@ def run_selftest() -> bool:
     # --- 打完剩余回合（状态机无关推进） ---
     def _key(k="space"):
         app._on_key(type("E", (), {"keysym": k})())
-    for _ in range(40):
+    for _ in range(60):
         if app.phase == "end":
             break
+        if app.phase == "upgrade":
+            _key("1")   # 升级三选一：取第一张
         if app.phase in ("intro", "result", "pass"):
             _key()
         if app.phase == "aim":

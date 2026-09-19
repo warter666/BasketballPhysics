@@ -5,7 +5,6 @@
   python -m shotlab sweep  速度 × 仰角 命中地图
   python -m shotlab demo   三个经典出手（罚球 / 打板 / 三分）
   python -m shotlab interactive  交互式实验室
-  python -m shotlab plot   保存轨迹 PNG（需要 matplotlib）
 """
 
 from __future__ import annotations
@@ -67,11 +66,6 @@ def cmd_shot(args) -> int:
         mc = run_mc(p, n=args.mc, seed=args.seed)
         print(f"蒙特卡洛: {mc.n} 次带噪声出手，命中 {mc.hits} 次…\n")
     _print_shot(p, mc=mc)
-    if args.plot:
-        from .render_plot import plot_shot
-        out = args.out or "shots/shot.png"
-        plot_shot(_params_from(args), Simulator(_params_from(args)).run(), out)
-        print(f"\n轨迹图已保存: {out}")
     return 0
 
 
@@ -114,15 +108,6 @@ def cmd_demo(_args) -> int:
         print(f"\n{'═' * 66}\n  {name}  —  {pre['label']}\n{'═' * 66}")
         mc = run_mc(p, n=200, seed=13)
         _print_shot(p, mc=mc, show_timeline=(name != "three"))
-    return 0
-
-
-def cmd_plot(args) -> int:
-    p = _params_from(args)
-    r = Simulator(p).run()
-    from .render_plot import plot_shot
-    out = plot_shot(r, p, args.out or "shots/shot.png")
-    print(f"{r.label} ({r.label_cn})  →  {out}")
     return 0
 
 
@@ -191,8 +176,6 @@ def main(argv=None) -> int:
     _add_shot_args(sp)
     sp.add_argument("--mc", type=int, default=300, help="附带的蒙特卡洛样本数（0 关闭）")
     sp.add_argument("--seed", type=int, default=42)
-    sp.add_argument("--plot", action="store_true", help="同时保存 PNG")
-    sp.add_argument("--out", default=None, help="PNG 输出路径")
     sp.set_defaults(fn=cmd_shot)
 
     mp = sub.add_parser("mc", help="蒙特卡洛命中率")
@@ -218,11 +201,6 @@ def main(argv=None) -> int:
 
     ip = sub.add_parser("interactive", help="交互式实验室")
     ip.set_defaults(fn=cmd_interactive)
-
-    pp = sub.add_parser("plot", help="保存轨迹 PNG")
-    _add_shot_args(pp)
-    pp.add_argument("--out", default=None)
-    pp.set_defaults(fn=cmd_plot)
 
     args = ap.parse_args(argv)
     if not getattr(args, "fn", None):

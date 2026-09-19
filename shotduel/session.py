@@ -52,7 +52,8 @@ class RoundState:
 class SoloSession:
     """单人 · 10 节点 Roguelike：生命、筹码、构筑、Boss 与三选一升级。"""
 
-    def __init__(self, seed=None, n_rounds=10):
+    def __init__(self, seed=None, n_rounds=10, hp: int = 3,
+                 max_hp: int | None = None):
         self.rng = random.Random(seed)
         self.n_rounds = n_rounds
         self.round_idx = -1
@@ -60,8 +61,8 @@ class SoloSession:
         self.streak = 0
         self.best_streak = 0
         self.total = 0
-        self.hp = 3
-        self.max_hp = 3
+        self.hp = hp
+        self.max_hp = max_hp if max_hp is not None else hp
         self.coins = 0
         self.upgrades: list[str] = []
         self.upgrade_counts: dict[str, int] = {}

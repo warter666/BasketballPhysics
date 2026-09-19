@@ -108,7 +108,8 @@ class TestSolo(unittest.TestCase):
         self.assertGreaterEqual(len(s.upgrades), 1)
 
     def test_run_has_ten_nodes_and_bosses(self):
-        s = SoloSession(seed=2, n_rounds=10)
+        # 高 HP 难度旋钮：跑满 10 节点验证结构（默认 HP 下失手会提前阵亡）
+        s = SoloSession(seed=2, n_rounds=10, hp=99)
         bosses = []
         while not s.finished:
             r = s.start_round()

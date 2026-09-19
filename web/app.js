@@ -2,7 +2,7 @@ const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
 const W=1280,H=720,GROUND=625,G=980,BALL_R=15,MAX_DRAG=300,MAX_ATTEMPTS=5,ADVANCE_DELAY=1200;
 const START={x:145,y:GROUND-BALL_R};
 const ui={
- level:document.getElementById("level"),attempts:document.getElementById("attempts"),made:document.getElementById("made"),
+ level:document.getElementById("level"),hp:document.getElementById("hp"),runStatus:document.getElementById("runStatus"),runMap:document.getElementById("runMap"),attempts:document.getElementById("attempts"),made:document.getElementById("made"),
  angle:document.getElementById("angle"),power:document.getElementById("power"),spin:document.getElementById("spin"),
  result:document.getElementById("result"),detail:document.getElementById("detail"),tip:document.getElementById("tip"),
  levelTag:document.getElementById("levelTag"),levelName:document.getElementById("levelName"),levelGoal:document.getElementById("levelGoal"),
@@ -14,14 +14,19 @@ const ui={
 };
 
 const levels=[
- {name:"起点",goal:"学会控制基础角度与力量",tip:"先让球稳定地落入篮筐，不需要碰撞。",hoop:{x:1080,y:365},obs:[]},
- {name:"弧高",goal:"从高处越过弧高杆",tip:"杆挡住低弧线：提高仰角，同时补足力量。",hoop:{x:1080,y:365},obs:[{t:"bar",x:575,y:320,w:34,h:305}]},
- {name:"反弹",goal:"利用墙面改变球的方向",tip:"不要直接瞄准篮筐，先让墙成为轨迹的一部分。",hoop:{x:1080,y:365},obs:[{t:"wall",x:700,y:300,w:34,h:270}]},
- {name:"通道",goal:"规划连续轨迹穿过通道",tip:"先决定球从哪个入口进入，再决定出手角度。",hoop:{x:1080,y:365},obs:[{t:"block",x:520,y:160,w:360,h:90},{t:"block",x:520,y:340,w:360,h:130},{t:"wall",x:880,y:0,w:34,h:250}]},
- {name:"时机",goal:"等待移动障碍打开路线",tip:"移动障碍是时间问题：角度正确还不够，要抓住窗口。",hoop:{x:1080,y:365},obs:[{t:"bar",x:640,y:350,w:34,h:145,move:true},{t:"wall",x:870,y:310,w:34,h:260}]}
+ {name:"起点",goal:"学会控制基础角度与力量",tip:"先让球稳定地落入篮筐，不需要碰撞。",hoop:{x:1080,y:365},obs:[],kind:"normal"},
+ {name:"弧高",goal:"从高处越过弧高杆",tip:"杆挡住低弧线：提高仰角，同时补足力量。",hoop:{x:1080,y:365},obs:[{t:"bar",x:575,y:320,w:34,h:305}],kind:"normal"},
+ {name:"反弹",goal:"利用墙面改变球的方向",tip:"不要直接瞄准篮筐，先让墙成为轨迹的一部分。",hoop:{x:1080,y:365},obs:[{t:"wall",x:700,y:300,w:34,h:270}],kind:"normal"},
+ {name:"通道",goal:"规划连续轨迹穿过通道",tip:"先决定球从哪个入口进入，再决定出手角度。",hoop:{x:1080,y:365},obs:[{t:"block",x:520,y:160,w:360,h:90},{t:"block",x:520,y:340,w:360,h:130},{t:"wall",x:880,y:0,w:34,h:250}],kind:"challenge"},
+ {name:"时机",goal:"等待移动障碍打开路线",tip:"移动障碍是时间问题：角度正确还不够，要抓住窗口。",hoop:{x:1080,y:365},obs:[{t:"bar",x:640,y:350,w:34,h:145,move:true},{t:"wall",x:870,y:310,w:34,h:260}],kind:"challenge"},
+ {name:"低弧反弹",goal:"低弧线进入，再用墙面修正",tip:"先压低弧线，撞墙后利用反弹角度进入篮筐。",hoop:{x:1110,y:380},obs:[{t:"wall",x:650,y:390,w:34,h:235},{t:"bar",x:500,y:250,w:34,h:220}],kind:"challenge"},
+ {name:"双障碍",goal:"连续处理两个物理表面",tip:"这一关开始考验构筑：旋转和反弹能量都会改变路线。",hoop:{x:1100,y:340},obs:[{t:"wall",x:560,y:280,w:34,h:280},{t:"bar",x:790,y:170,w:34,h:300}],kind:"elite"},
+ {name:"移动通道",goal:"在移动窗口中穿过通道",tip:"不要追求完美轨迹，找一个稳定的时间窗口。",hoop:{x:1110,y:350},obs:[{t:"block",x:520,y:130,w:380,h:95},{t:"block",x:520,y:390,w:380,h:105},{t:"bar",x:760,y:255,w:34,h:115,move:true}],kind:"elite"},
+ {name:"最终考验",goal:"综合利用角度、碰撞与旋转",tip:"最后一关前的综合测试：没有单一正确投法。",hoop:{x:1130,y:330},obs:[{t:"wall",x:600,y:300,w:34,h:280},{t:"bar",x:760,y:150,w:34,h:300},{t:"bar",x:930,y:370,w:34,h:180,move:true}],kind:"elite"},
+ {name:"DUEL BOSS",goal:"突破 Boss 防线并完成本局",tip:"Boss 会同时考验反弹、弧高和时机。构筑应该开始体现价值。",hoop:{x:1135,y:315},obs:[{t:"wall",x:560,y:260,w:34,h:320},{t:"bar",x:730,y:120,w:34,h:330},{t:"wall",x:900,y:300,w:34,h:280},{t:"bar",x:1030,y:170,w:34,h:220,move:true}],kind:"boss"}
 ];
 
-let level=0,levelShots=0,totalShots=0,made=0,spin=0,drag=null,ball=null,preview=[],lastShot=null,advanceTimer=null,runEnded=false,secondChanceUsed=false;
+let level=0,levelShots=0,totalShots=0,made=0,spin=0,hp=3,drag=null,ball=null,preview=[],lastShot=null,advanceTimer=null,runEnded=false,secondChanceUsed=false;
 const build={spinMaster:0,bankShot:0,secondChance:0};
 const REWARDS=[
  {id:"spinMaster",name:"旋转大师",desc:"反弹时旋转影响 ×1.8。主动利用旋转改变路线。",tag:"改变反弹方向"},
@@ -32,6 +37,14 @@ let levelStartedAt=performance.now(),lastTime=performance.now(),movingClock=0;
 
 function current(){return levels[level]}
 function ballStart(){return{x:START.x,y:START.y,vx:0,vy:0,active:false,t:0,path:[],collisions:0}}
+function renderRunMap(){
+ ui.runStatus.textContent="NODE "+(level+1)+" / "+levels.length+(levels[level].kind==="boss"?" · BOSS":"");
+ ui.runMap.innerHTML=levels.map((l,i)=>{
+   const state=i<level?"done":i===level?"current":"locked";
+   return `<span class="run-node ${state} ${l.kind}" title="${l.name}">${i+1}</span>`;
+ }).join('<i></i>');
+ ui.hp.textContent=hp;
+}
 function renderBuild(){
  const names=REWARDS.filter(r=>build[r.id]>0).map(r=>r.name+" ×"+build[r.id]);
  ui.buildSummary.textContent=names.length?names.join(" · "):"基础投篮";
@@ -41,7 +54,7 @@ function reset(){
  if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null}
  ball=null;drag=null;preview=[];lastShot=null;levelShots=0;levelStartedAt=performance.now();secondChanceUsed=false;
  ui.result.textContent="准备出手";ui.detail.textContent=current().tip;ui.tip.textContent="拖动篮球：方向 = 角度，距离 = 力量；滚轮 = 旋转";
- ui.level.textContent=level+1;ui.levelTag.textContent="LEVEL "+(level+1);ui.levelName.textContent=current().name;ui.levelGoal.textContent=current().goal;
+ ui.level.textContent=level+1;renderRunMap();ui.levelTag.textContent="LEVEL "+(level+1);ui.levelName.textContent=current().name;ui.levelGoal.textContent=current().goal;
  ui.goalText.textContent=current().goal;updateAttemptUI();updateLab(null);renderBuild();draw();
 }
 function updateAttemptUI(){
@@ -110,17 +123,41 @@ function diagnose(scored,shot,collisionCount){
  if(target>900)return"路线接近成功：保持大方向，只做小幅力量调整。";
  return"这次没有进筐。下一球只改一个变量，更容易找到原因。";
 }
+function showRunComplete(){
+ ui.modalLabel.textContent="RUN COMPLETE";
+ ui.modalTitle.textContent="你完成了这一局";
+ ui.modalText.textContent=`10 个节点全部完成 · 命中 ${made} 次 · 总出手 ${totalShots} 次 · 最终构筑 ${ui.buildSummary.textContent}`;
+ ui.rewardList.innerHTML='<button class="reward-option run-complete" id="restartAfterWin"><strong>再来一局</strong><span>保留当前规则，重新从 Node 1 开始。</span><em>RESET RUN</em></button>';
+ ui.rewardModal.classList.remove("hidden");
+ document.getElementById("restartAfterWin").onclick=resetRun;
+}
 function showRewards(){
- ui.rewardList.innerHTML=REWARDS.map(r=>`<button class="reward-option" data-reward="${r.id}"><strong>${r.name}</strong><span>${r.desc}</span><em>${r.tag} · 当前 ${build[r.id]} 层</em></button>`).join("");
+ ui.modalLabel.textContent="BUILD REWARD";ui.modalTitle.textContent="选择一个物理构筑";ui.modalText.textContent="奖励会改变下一关的投法，而不是直接增加命中率。";ui.rewardList.innerHTML=REWARDS.map(r=>`<button class="reward-option" data-reward="${r.id}"><strong>${r.name}</strong><span>${r.desc}</span><em>${r.tag} · 当前 ${build[r.id]} 层</em></button>`).join("");
  ui.rewardModal.classList.remove("hidden");
  ui.rewardList.querySelectorAll("[data-reward]").forEach(btn=>btn.onclick=()=>chooseReward(btn.dataset.reward));
 }
 function chooseReward(id){
  build[id]++;ui.rewardModal.classList.add("hidden");renderBuild();ui.tip.textContent="构筑已加入 · 下一关开始";next();
 }
+function loseLife(){
+ hp--;
+ renderRunMap();
+ if(hp<=0){
+   runEnded=true;
+   ui.modalLabel.textContent="RUN OVER";
+   ui.modalTitle.textContent="这局结束了";
+   ui.modalText.textContent=`你在 Node ${level+1} 用尽了生命。构筑没有保留到下一局。`;
+   ui.rewardList.innerHTML='<button class="reward-option run-complete" id="restartAfterLoss"><strong>重新开始</strong><span>清空本局构筑，从 Node 1 再次挑战。</span><em>NEW RUN</em></button>';
+   ui.rewardModal.classList.remove("hidden");
+   document.getElementById("restartAfterLoss").onclick=resetRun;
+   return;
+ }
+ ui.tip.textContent=`生命 -1 · 剩余 ${hp} · 重试当前节点`;
+ reset();
+}
 function resetRun(){
  if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null}
- level=0;levelShots=0;totalShots=0;made=0;spin=0;runEnded=false;for(const k of Object.keys(build))build[k]=0;ui.made.textContent=0;ui.rewardModal.classList.add("hidden");reset();
+ level=0;levelShots=0;totalShots=0;made=0;spin=0;hp=3;runEnded=false;for(const k of Object.keys(build))build[k]=0;ui.made.textContent=0;ui.rewardModal.classList.add("hidden");reset();
 }
 function finish(scored,reason){
  const shot=lastShot;const collisions=ball?ball.collisions:0;ball=null;preview=[];
@@ -128,8 +165,14 @@ function finish(scored,reason){
  ui.made.textContent=made;ui.result.textContent=scored?"SWISH!":"MISS";
  ui.detail.textContent=diagnose(scored,shot,collisions);
  updateLab(shot?{...shot,scored,collisions}:null);
- if(scored){ui.tip.textContent="LEVEL CLEAR · 选择一个构筑，然后进入下一关";showRewards()}
- else if(levelShots>=MAX_ATTEMPTS){ui.tip.textContent="本关结束 · 点击“重置本关”再试一次";ui.result.textContent="OUT OF SHOTS"}
+ if(scored){
+  if(level===levels.length-1){runEnded=true;ui.tip.textContent="RUN COMPLETE · 你完成了全部 10 个节点";showRunComplete();}
+  else{ui.tip.textContent="NODE CLEAR · 选择一个构筑，然后进入下一关";showRewards();}
+ } else if(levelShots>=MAX_ATTEMPTS){
+   ui.tip.textContent=hp>1?"本节点失败 · 消耗 1 HP 并重试":"本节点失败 · 生命耗尽";
+   ui.result.textContent=hp>1?"LIFE LOST":"RUN OVER";
+   setTimeout(()=>{if(!runEnded)loseLife()},700);
+ }
 }
 function queueNext(){if(advanceTimer)return;advanceTimer=setTimeout(()=>{advanceTimer=null;next()},ADVANCE_DELAY)}
 function updateLab(s){
@@ -141,7 +184,8 @@ function updateLab(s){
 }
 function next(){
  if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null}
- level=(level+1)%levels.length;reset()
+ if(runEnded)return;
+ if(level<levels.length-1){level++;reset()}
 }
 function draw(){
  ctx.clearRect(0,0,W,H);drawBackground();drawCourt();drawHoop();drawObstacles();drawPlayer();
@@ -202,5 +246,5 @@ canvas.addEventListener("pointerup",e=>{if(!drag)return;const p=pointer(e),a=get
 canvas.addEventListener("pointercancel",()=>{drag=null});
 canvas.addEventListener("wheel",e=>{e.preventDefault();spin=Math.max(-8,Math.min(8,spin+(e.deltaY<0?.5:-.5)));ui.spin.textContent=spin.toFixed(1)},{passive:false});
 document.getElementById("reset").onclick=reset;document.getElementById("resetRun").onclick=resetRun;document.getElementById("next").onclick=next;
-ui.made.textContent=made;renderBuild();reset();requestAnimationFrame(tick);
+ui.made.textContent=made;renderBuild();renderRunMap();reset();requestAnimationFrame(tick);
 if(typeof module!=="undefined")module.exports={levels,current,reset,shoot,simulate,hoopScore,next,tick};

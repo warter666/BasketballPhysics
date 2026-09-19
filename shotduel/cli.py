@@ -75,8 +75,18 @@ def run_cli(mode: str = "solo", seed=None):
         while not session.finished:
             r = session.start_round()
             _show_round_header(session, r)
+            print(f"  HP {session.hp}/{session.max_hp} · 🪙 {session.coins}")
             v0, angle, spin = _aim_prompt(session, 0)
             result, score = session.shoot(v0, angle, spin)
             _show_shot(result, r.params_by_player[0], score)
+            if session.finished:
+                break
+            print("\n  🧬 本局升级：")
+            for i, up in enumerate(session.offers, 1):
+                stacks = session.upgrade_counts.get(up.id, 0)
+                print(f"   [{i}] {up.icon} {up.name} — {up.desc}（已叠 {stacks}/{up.max_stacks}）")
+            idx = int(_ask("  选择 1-3: ", "1")) - 1
+            session.choose_upgrade(max(0, min(len(session.offers) - 1, idx)))
+            print(f"  → 获得 {session.build_text}")
         print()
         print(session.summary())

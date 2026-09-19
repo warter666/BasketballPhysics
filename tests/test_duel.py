@@ -77,6 +77,8 @@ class TestSolo(unittest.TestCase):
                 s.start_round()
                 # 罚球线附近的保守出手（可能不中，但流程必须走通）
                 s.shoot(7.5, 50.0, 6.0)
+                if s.awaiting_upgrade:
+                    s.choose_upgrade(0)
         self.assertEqual(a.total, b.total)
         self.assertEqual([h[2] for h in a.history], [h[2] for h in b.history])
 
@@ -92,6 +94,31 @@ class TestSolo(unittest.TestCase):
         s = SoloSession(seed=3)
         r = s.start_round()
         self.assertLessEqual(r.rule.stars, 2)
+
+    def test_upgrade_changes_build_and_persists(self):
+        s = SoloSession(seed=21)
+        s.start_round()
+        s.shoot(7.55, 52.5, 6.0)
+        self.assertTrue(s.awaiting_upgrade)
+        chosen = s.choose_upgrade(0)
+        self.assertIn(chosen.id, s.upgrades)
+        self.assertFalse(s.awaiting_upgrade)
+        self.assertIsNone(s.round)
+        r = s.start_round()
+        self.assertGreaterEqual(len(s.upgrades), 1)
+
+    def test_run_has_ten_nodes_and_bosses(self):
+        s = SoloSession(seed=2, n_rounds=10)
+        bosses = []
+        while not s.finished:
+            r = s.start_round()
+            bosses.append(r.boss)
+            s.shoot(7.55, 52.5, 6.0)
+            if s.awaiting_upgrade:
+                s.choose_upgrade(0)
+        self.assertEqual(len(s.history), 10)
+        self.assertEqual(bosses, [False, False, False, False, True,
+                                  False, False, False, False, True])
 
 
 class TestDuel(unittest.TestCase):

@@ -48,3 +48,22 @@ button:hover{border-color:#647386}
 .level-banner span{color:var(--blue);font:10px monospace;letter-spacing:1px}
 .level-banner b{margin-left:8px;font-size:13px}
 .level-banner small{display:block;margin-top:3px;color:var(--muted);font-size:10px}
+
+.build-card{padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.build-card>div:first-child{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.build-card b{font-size:12px}
+.build-list{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.build-chip{padding:4px 7px;border:1px solid #38516a;border-radius:999px;background:#142131;color:#bfe4ff;font-size:10px}
+.reward-modal{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:#071019cc;backdrop-filter:blur(4px)}
+.reward-modal.hidden{display:none}
+.reward-box{width:min(760px,90%);padding:24px;background:#151d27;border:1px solid #46566a;border-radius:16px;box-shadow:0 24px 80px #000b}
+.reward-box h2{margin:5px 0 4px;font-size:24px}
+.reward-box p{margin:0 0 18px;color:var(--muted);font-size:12px}
+.reward-list{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.reward-option{padding:15px;text-align:left;background:#111821;border:1px solid #344354;border-radius:12px;color:var(--text);cursor:pointer}
+.reward-option:hover{border-color:#76b8ea;transform:translateY(-2px)}
+.reward-option strong{display:block;font-size:15px;margin-bottom:6px;color:var(--accent)}
+.reward-option span{display:block;color:#9eacba;font-size:11px;line-height:1.5}
+.reward-option em{display:block;margin-top:9px;color:#6f8192;font-size:9px;font-style:normal}
+#resetRun{grid-column:span 2}
+@media(max-width:1150px){.reward-list{grid-template-columns:1fr}.reward-box{max-height:90%;overflow:auto}}

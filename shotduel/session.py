@@ -184,6 +184,7 @@ class SoloSession:
             self.coins += u.coin_gain
         self.offers = []
         self.awaiting_upgrade = False
+        self.round = None
         return u
 
     def shoot(self, v0: float, angle_deg: float, spin: float,
@@ -234,7 +235,6 @@ class SoloSession:
             self.won = True
         else:
             self._prepare_upgrades()
-        self.round = None
         return result, score
 
     def summary(self) -> str:

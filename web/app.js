@@ -1,5 +1,5 @@
 const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
-const W=1280,H=720,GROUND=625,G=980,BALL_R=15,MAX_DRAG=250;
+const W=1280,H=720,GROUND=625,G=980,BALL_R=15,MAX_DRAG=300,ADVANCE_DELAY=1200;
 const ui={level:document.getElementById("level"),attempts:document.getElementById("attempts"),made:document.getElementById("made"),
 angle:document.getElementById("angle"),power:document.getElementById("power"),spin:document.getElementById("spin"),
 result:document.getElementById("result"),detail:document.getElementById("detail"),tip:document.getElementById("tip"),
@@ -17,13 +17,14 @@ let level=0,attempts=0,made=0,spin=0,drag=null,ball=null,preview=[],lastShot=nul
 function reset(){ball=null;drag=null;preview=[];lastShot=null;ui.result.textContent="准备出手";ui.detail.textContent="先观察障碍，再规划轨迹。";updateLab(null);draw()}
 function ballStart(){return {x:145,y:GROUND-BALL_R,vx:0,vy:0,active:false,t:0,path:[],collisions:0}}
 function current(){return levels[level]}
+function boardRect(){const h=current().hoop;return{x:h.x+55,y:h.y-85,w:12,h:120}}
 
 function pointer(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
 function getAim(p){
  const b=ball||ballStart(),dx=b.x-p.x,dy=b.y-p.y;
  const len=Math.min(MAX_DRAG,Math.hypot(dx,dy)); return {dx,dy,len,angle:Math.atan2(-dy,dx),power:len/MAX_DRAG}
 }
-function velocity(a,p){const speed=390+Math.pow(p,0.72)*760;return{vx:Math.cos(a)*speed,vy:-Math.sin(a)*speed}}
+function velocity(a,p){const speed=380+Math.pow(p,0.72)*980;return{vx:Math.cos(a)*speed,vy:-Math.sin(a)*speed}}
 
 function simulate(v,steps=240){
  let s={x:145,y:GROUND-BALL_R,vx:v.vx,vy:v.vy},path=[],hits=0,apex=s.y;
@@ -37,6 +38,7 @@ function simulate(v,steps=240){
        resolveRect(s,q);hits++;
      }
    }
+   const bd=boardRect();if(circleRect(s,bd)){resolveRect(s,bd);hits++}
    path.push({x:s.x,y:s.y});if(s.x>current().hoop.x+100||s.y>GROUND+100)break;
  }
  return{path,hits,apex}
@@ -72,6 +74,13 @@ function finish(scored,reason){
  ui.made.textContent=made;ui.result.textContent=scored?"SWISH!":"MISS";ui.detail.textContent=scored?"轨迹成功进入篮筐。":reason;
  if(lastShot){ui.angle.textContent=lastShot.angle.toFixed(1)+"°";ui.power.textContent=Math.round(lastShot.power*100)+"%";ui.spin.textContent=lastShot.spin.toFixed(1)}
  updateLab(lastShot?{...lastShot,scored}:null);
+ if(scored)queueNext();
+}
+let advanceTimer=null;
+function queueNext(){
+ if(advanceTimer)return;
+ ui.tip.textContent="LEVEL CLEAR · 即将进入下一关";
+ advanceTimer=setTimeout(()=>{advanceTimer=null;next()},ADVANCE_DELAY);
 }
 function updateLab(s){
  ui.distance.textContent=s?((current().hoop.x-145)/100).toFixed(2)+" m":"—";
@@ -79,7 +88,10 @@ function updateLab(s){
  ui.collision.textContent=s?(preview.length?String(simulate(velocity(s.angle*Math.PI/180,s.power)).hits):"0")+" 次":"—";
  ui.outcome.textContent=s?(s.scored?"命中":"未命中"):"—";
 }
-function next(){level=(level+1)%levels.length;ui.level.textContent=level+1;ui.tip.textContent="LEVEL "+(level+1)+" · "+current().name;reset()}
+function next(){
+ if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null}
+ level=(level+1)%levels.length;ui.level.textContent=level+1;ui.tip.textContent="LEVEL "+(level+1)+" · "+current().name;reset();
+}
 function draw(){
  ctx.clearRect(0,0,W,H);drawBackground();drawCourt();drawHoop();drawObstacles();drawPlayer();
  if(!ball||!ball.active)drawPreview();
@@ -128,6 +140,7 @@ function tick(now){
    if(ball.y+BALL_R>GROUND){ball.y=GROUND-BALL_R;ball.vy=-Math.abs(ball.vy)*.64;ball.vx*=.92;ball.collisions++}
    if(ball.x-BALL_R<0){ball.x=BALL_R;ball.vx=Math.abs(ball.vx)*.72;ball.collisions++}
    for(const o0 of current().obs){const o=o0.move?movingObstacle(o0):o0;if(circleRect(ball,o)){resolveRect(ball,o);ball.collisions++}}
+   const bd=boardRect();if(circleRect(ball,bd)){resolveRect(ball,bd);ball.collisions++}
    if(hoopScore(ball,prev)){finish(true,"");}
    else if(ball.t>4.8||ball.y>GROUND+80||ball.x>W+80||ball.collisions>9)finish(false,"这条轨迹没有完成进筐。试试改变角度或力量。");
  }

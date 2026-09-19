@@ -203,4 +203,4 @@ canvas.addEventListener("pointercancel",()=>{drag=null});
 canvas.addEventListener("wheel",e=>{e.preventDefault();spin=Math.max(-8,Math.min(8,spin+(e.deltaY<0?.5:-.5)));ui.spin.textContent=spin.toFixed(1)},{passive:false});
 document.getElementById("reset").onclick=reset;document.getElementById("resetRun").onclick=resetRun;document.getElementById("next").onclick=next;
 ui.made.textContent=made;renderBuild();reset();requestAnimationFrame(tick);
-if(typeof module!=="undefined")module.exports={levels,current,reset,shoot,simulate,hoopScore,next};
+if(typeof module!=="undefined")module.exports={levels,current,reset,shoot,simulate,hoopScore,next,tick};

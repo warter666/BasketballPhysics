@@ -3,7 +3,12 @@
 // 统计解出率——0% 的关卡不允许存在（设计文档 §15 的第一块基石）。
 "use strict";
 const els = {};
-function makeEl() { return { textContent: "", onclick: null }; }
+function makeEl() {
+  return { textContent: "", innerHTML: "", onclick: null, style: {},
+    dataset: {},
+    classList: { add() {}, remove() {}, toggle() {} },
+    querySelectorAll: () => [], appendChild() {}, remove() {} };
+}
 const ctxStub = new Proxy({}, {
   get: (t, k) => k === "createLinearGradient" ? () => ({ addColorStop() {} }) : (typeof t[k] !== "undefined" ? t[k] : () => {}),
   set: () => true,

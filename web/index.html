@@ -10,7 +10,7 @@
   <main class="app">
     <section class="game-wrap">
       <canvas id="game" width="1280" height="720"></canvas>
-      <div class="tip" id="tip">拖动篮球：方向 = 角度，距离 = 力量；滚轮 = 旋转</div>
+      <div class="tip" id="tip">拖动篮球：方向 = 角度，距离 = 力量；滚轮 = 旋转</div>\n      <div class="reward-modal hidden" id="rewardModal"><div class="reward-box"><span class="label">BUILD REWARD</span><h2>选择一个物理构筑</h2><p>奖励会改变下一关的投法，而不是直接增加命中率。</p><div class="reward-list" id="rewardList"></div></div></div>
       <div class="level-banner" id="levelBanner">
         <span id="levelTag">LEVEL 1</span><b id="levelName">起点</b>
         <small id="levelGoal">学会控制基础角度与力量</small>
@@ -49,14 +49,14 @@
         </div>
       </section>
 
-      <section class="goal-card">
+      <section class="build-card"><div><span class="label">CURRENT BUILD</span><b id="buildSummary">基础投篮</b></div><div class="build-list" id="buildList"></div></section>\n\n      <section class="goal-card">
         <div><span class="label">THIS LEVEL</span><b id="goalText">把球送进篮筐</b></div>
         <div class="attempt-meter"><span id="attemptMeter"></span></div>
         <small id="attemptText">本关最多 5 次尝试</small>
       </section>
 
       <div class="btn-row">
-        <button id="reset">重置本关</button>
+        <button id="reset">重置本关</button>\n        <button id="resetRun">重置整局</button>
         <button id="next" class="primary">下一关</button>
       </div>
 
